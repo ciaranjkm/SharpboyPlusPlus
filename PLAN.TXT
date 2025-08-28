@@ -1,0 +1,3 @@
+1. make cpu usage lower 1% ideally
+2. ppu timing test roms
+3. mbc implimetation
