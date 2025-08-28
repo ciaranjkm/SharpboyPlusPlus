@@ -234,6 +234,13 @@ ppu_modes PPU::get_current_mode() {
 	return current_mode;
 }
 
+bool PPU::is_draw_read() {
+    return draw_ready;
+}
+void PPU::reset_draw_ready() {
+    draw_ready = false;
+}
+
 void PPU::render_background_scanline() {
 	//bg and window enable bit
 	if ((lcdc & 0x01) == 0) {
@@ -290,5 +297,5 @@ void PPU::render_texture() {
 	SDL_RenderClear(renderer);
 	SDL_UpdateTexture(background_texture, NULL, background_pixel_buffer.data(), SCREEN_WIDTH * sizeof(uint32_t));
 	SDL_RenderTexture(renderer, background_texture, NULL, NULL);
-	SDL_RenderPresent(renderer);
+    draw_ready = true;
 }

@@ -1,59 +1,56 @@
 #pragma once
 
+#include "_definitions.h"
 #include <iostream>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <chrono>
 #include <thread>
-#include "_definitions.h"
 #include "CPU.h"
 #include "MMU.h"
 #include "Timers.h"
 #include "PPU.h"
 
-#include "emu_visuals/Visuals.h"
-#include "emu_visuals/DebugVisuals.h"
+#include "emu_visuals/Graphics.h"
 
 class Emulator {
 public:
-	//cli only const
 	Emulator();
 	~Emulator();
 
+	//instance setup
 	void set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr);
 	bool is_using_boot_rom();
-
-	//emu control functions start/stop/run
 	void run_emulator();
 	void close_emulator();
+
+	//todo remove sst stuff
 	bool get_single_step_mode();
 
-	//init sdl 
+	//graphics 
 	void initialise_SDL();
+	//gui funcs
+	void toggle_show_imgui();
 
-	void render_texture(SDL_Texture* texture);
-	void clear_bg_renderer();
-
-	//functions for other components to call
+	//functions for other comps to tick
 	void tick_other_components(const int& cycles);
+
+	//interrupts
 	void trigger_interrupt(const interrupt_types& interrupt);
 	void clear_interrupt(const int& interrupt);
 
 	//memory functions
 	byte bus_read(const ushort& address);
 	void bus_write(const ushort& address, const byte& value);
-
-	//io read write
 	byte read_timer_io(const byte& timer_io);
 	void write_timer_io(const byte& timer_io, const byte& value);
-
 	byte read_ppu_io(const byte& ppu_io);
 	void write_ppu_io(const byte& ppu_io, const byte& value);
-	
 	byte io_instant_read(const io_addresses& io_target);
 	void io_instant_write(const io_addresses& io_target, const byte& value);
 
+	//ppu functions
 	ppu_modes get_current_ppu_mode();
 
 private:
@@ -78,6 +75,8 @@ private:
 	bool single_step_test_mode = false;
 	bool emulator_running = false;
 	bool using_boot_rom = false;
+
+	bool show_imgui = true;
 
 private:
 	int initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom);

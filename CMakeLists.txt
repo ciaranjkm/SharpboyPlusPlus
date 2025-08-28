@@ -21,45 +21,37 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3)
 
-#fetch imgui
+# Fetch ImGui
 FetchContent_Declare(
-    ImGui
+    imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG docking   
+    GIT_TAG docking
 )
-FetchContent_MakeAvailable(ImGui)
+FetchContent_GetProperties(imgui)
+if(NOT imgui_POPULATED)
+    FetchContent_Populate(imgui)
 
-#create imgui lib 
-set(IMGUI_SOURCES
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
-)
-add_library(ImGui STATIC)
+    # Create ImGui library target
+    add_library(ImGui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+    )
 
-target_sources(ImGui PRIVATE
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
-)
+    target_include_directories(ImGui PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+    )
 
-target_include_directories(ImGui PUBLIC
-    ${imgui_SOURCE_DIR}
-    ${imgui_SOURCE_DIR}/backends
-)
-
-target_link_libraries(ImGui PUBLIC SDL3::SDL3)
+    target_link_libraries(ImGui PUBLIC SDL3::SDL3)
+endif()
 
 # Add source to this project's executable.
-add_executable (SharpboyPlusPlus "main.cpp" "src/externals/nlohmann/json.hpp" "src/emulator/Emulator.h" "src/emulator/Emulator.cpp" "src/emulator/CPU.h" "src/emulator/CPU.cpp" "src/emulator/MMU.h" "src/emulator/MMU.cpp" "src/emulator/Instruction_definitions.cpp" "src/emulator/Timers.h" "src/emulator/Timers.cpp" "src/emulator/PPU.h" "src/emulator/PPU.cpp" "src/emulator/emu_visuals/DebugVisuals.h" "src/emulator/emu_visuals/Visuals.h" "src/emulator/emu_visuals/Visuals.cpp")
+add_executable (SharpboyPlusPlus "main.cpp" "src/externals/nlohmann/json.hpp" "src/emulator/Emulator.h" "src/emulator/Emulator.cpp" "src/emulator/CPU.h" "src/emulator/CPU.cpp" "src/emulator/MMU.h" "src/emulator/MMU.cpp" "src/emulator/Instruction_definitions.cpp" "src/emulator/Timers.h" "src/emulator/Timers.cpp" "src/emulator/PPU.h" "src/emulator/PPU.cpp"  "src/emulator/emu_visuals/Graphics.h" "src/emulator/emu_visuals/Graphics.cpp")
 
 target_link_libraries(SharpboyPlusPlus PRIVATE SDL3::SDL3 ImGui)
 
