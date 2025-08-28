@@ -51,7 +51,7 @@ void PPU::reset_ppu() {
     obp0 = 0x00;
     obp1 = 0x00;
 
-    if (!using_boot_rom) {
+    if (using_boot_rom) {
         return;
     }
 

@@ -15,10 +15,6 @@ int main(int argc, char* argv[]) {
 )ART";
 
 	std::cout << art << std::endl;
-
-	bool using_SDL = true;
-	bool single_step_mode = false;
-	bool using_boot_rom = true;
 	
 	std::shared_ptr<Emulator> e = std::make_shared<Emulator>();
 	if (e == nullptr) {

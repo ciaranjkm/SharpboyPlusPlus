@@ -26,7 +26,7 @@ void Timers::reset_timers() {
 	tima = 0x00;
 	tma = 0x00;
 
-	if (!using_boot_rom) {
+	if (using_boot_rom) {
 		return;
 	}
 

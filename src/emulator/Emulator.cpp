@@ -18,8 +18,8 @@ void Emulator::set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr) {
 	this->current_emulator_instance = emulator_ptr;
 }
 
-const bool Emulator::is_using_boot_rom() {
-	return &using_boot_rom;
+bool Emulator::is_using_boot_rom() {
+	return using_boot_rom;
 }
 
 int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom) {
@@ -28,7 +28,7 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 		return -255;
 	}
 
-	this->using_boot_rom = using_boot_rom;
+	this->using_boot_rom = false;
 	
 	//load rom file into memory and optionally boot rom + parse for rom header
 
@@ -46,7 +46,6 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 	if (this->using_boot_rom) {
 		if (!load_boot_rom_file("boot/boot.bin", *boot_rom_ptr)) {
 			printf("[SB] Failed to load BOOT ROM file from boot/boot.bin\n");
-			this->using_boot_rom = false;
 		}
 	}
 
@@ -94,8 +93,11 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 		return -5;
 	}
 	PPU_ptr->reset_ppu();
+	
+	if (using_boot_rom) {
+		tick_other_components(4);
+	}
 
-	tick_other_components(4);
 	initialised = true;
 	printf("+----------------------------------------+\n");
 	printf("[SB] Success initialing emulator with %s\n", rom_file_name.c_str());
@@ -110,7 +112,7 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 }
 
 void Emulator::set_running(const bool& state) {
-	running = state;
+	emulator_running = state;
 }
 
 void Emulator::run_emulator() {
@@ -121,10 +123,10 @@ void Emulator::run_emulator() {
 
 	//todo
 	//temporary for testing, move to imgui button action and check for running emus first, work on ppu needed before this!
-	initialise_emu_instance("roms/PASSED/intr_timing.gb", true);
+	initialise_emu_instance("roms/PASSED/instr_timing.gb", false);
 
 	sdl_running = true;
-	running = true; //todo change this not running by default
+	emulator_running = true; //todo change this not running by default
 
 	auto last_time = std::chrono::high_resolution_clock::now();
 	double cycles_pending = 0;
@@ -140,7 +142,7 @@ void Emulator::run_emulator() {
 			break;
 		}
 
-		if (running) {
+		if (emulator_running) {
 			//todo add function to start clock for emulator to run at correct speed and toggle a bool flag to stop function running again before emu is closed
 			//todo add all timing into a class maybe static so only 1 emu at a time?
 			auto now = std::chrono::high_resolution_clock::now();
@@ -166,7 +168,7 @@ void Emulator::run_emulator() {
 void Emulator::close_emulator() {
 	printf("+----------------------------------------+\n");
 	sdl_running = false;
-	running = false;
+	emulator_running = false;
 
 	PPU_ptr = nullptr;
 	MMU_ptr = nullptr;
@@ -174,8 +176,8 @@ void Emulator::close_emulator() {
 	CPU_ptr = nullptr;
 }
 
-const bool Emulator::get_single_step_mode() {
-	return &single_step_test_mode;
+bool Emulator::get_single_step_mode() {
+	return single_step_test_mode;
 }
 
 void Emulator::initialise_SDL() {

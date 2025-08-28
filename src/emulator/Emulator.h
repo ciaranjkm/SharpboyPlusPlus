@@ -22,12 +22,12 @@ public:
 	~Emulator();
 
 	void set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr);
-	const bool is_using_boot_rom();
+	bool is_using_boot_rom();
 
 	//emu control functions start/stop/run
 	void run_emulator();
 	void close_emulator();
-	const bool get_single_step_mode();
+	bool get_single_step_mode();
 
 	//init sdl 
 	void initialise_SDL();
@@ -76,7 +76,7 @@ private:
 	//control bools
 	bool initialised = false;
 	bool single_step_test_mode = false;
-	bool running = false;
+	bool emulator_running = false;
 	bool using_boot_rom = false;
 
 private:
