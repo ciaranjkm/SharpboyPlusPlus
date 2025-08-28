@@ -3,11 +3,8 @@
 This is my first attempt at a major project in C++, trying to learn as much as possible whilst working on it. It's currently a w.i.p loading boot rom and some games with 32Kb ROM sizes and no gui. Currently passing all of mooneye's test roms for timing, cpu instructions, interrupts and OAM DMA.
 
 ### Screenshots
-<img width="240" height="224" alt="SharpboyPlusPlus_pi21RJvTqT" src="https://github.com/user-attachments/assets/c9ad6b46-a5cc-485c-9d71-c10c5b8087ed"/>      
-<img width="240" height="224" alt="SharpboyPlusPlus_c4XPWYuX2F" src="https://github.com/user-attachments/assets/6a2d8a4d-e740-4bec-9c7b-cb1bd8d300d1" />
-
-<img width="240" height="224" alt="SharpboyPlusPlus_Xhy419VjQ7" src="https://github.com/user-attachments/assets/be04e676-ea3d-47cf-8ef7-0151742b8bb0" />
-<img width="240" height="224" alt="SharpboyPlusPlus_7YmcI2I59j" src="https://github.com/user-attachments/assets/421c5f11-a8bf-4e81-bfec-39204ece3a76" />
+<img src="https://i.imgur.com/FSRMmRo.png" alt="Image 1" width="300" height="275">     <img src="https://i.imgur.com/1PIV4VB.png" alt="Image 2" width="300" height="275">
+<img src="https://i.imgur.com/jCv7FTa.png" alt="Image 3" width="300" height="275">     <img src="https://i.imgur.com/C8d67el.png" alt="Image 4" width="300" height="275">
 
 ### Features
 #### Implemented Features:
