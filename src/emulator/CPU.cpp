@@ -15,7 +15,7 @@ CPU::CPU(std::shared_ptr<Emulator> emulator_ptr) {
 CPU::~CPU() {
 	//set the emu pointer to nullpointer to -1 ref count
 	this->emulator_ptr = nullptr;
-	printf("[SB] Shutting down CPU object.\n");
+	printf("[SB] Shutting down CPU object\n");
 }
 
 //public
@@ -23,7 +23,8 @@ const bool CPU::is_cpu_initialised() {
 	return &initialised;
 }
 
-void CPU::reset_cpu(const bool& using_boot_rom, const bool& check_sum_zero) {
+void CPU::reset_cpu(const bool& check_sum_zero) {
+	bool using_boot_rom = emulator_ptr->is_using_boot_rom();
 	std::unique_ptr<cpu_data> new_data = std::make_unique<cpu_data>();
 	
 	new_data->a = 0x00;
@@ -77,10 +78,10 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 	*/
 	
 	if (false) {
-		byte one = emulator_ptr->memory_instant_read(data.pc);
-		byte two = emulator_ptr->memory_instant_read(data.pc + 1);
-		byte three = emulator_ptr->memory_instant_read(data.pc + 2);
-		byte four = emulator_ptr->memory_instant_read(data.pc + 3);
+		byte one = emulator_ptr->bus_read(data.pc);
+		byte two = emulator_ptr->bus_read(data.pc + 1);
+		byte three = emulator_ptr->bus_read(data.pc + 2);
+		byte four = emulator_ptr->bus_read(data.pc + 3);
 
 		printf("A: %02X A: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n",
 			data.a, data.f, data.b, data.c, data.d, data.e, data.h, data.l, data.sp, data.pc, one, two, three, four);
@@ -102,6 +103,7 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 	}
 	else {
 		byte opcode = fetch_opcode();
+		cycles += 2;
 
 		int t_cycles = 0;
 		t_cycles = handle_interupts(cycles);
@@ -110,6 +112,7 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 		}
 
 		emulator_ptr->tick_other_components(2);
+		cycles += 2;
 
 		if (enable_ime_next_cycle) {
 			data.ime = true;
@@ -128,7 +131,7 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 byte CPU::fetch_opcode() {
 	emulator_ptr->tick_other_components(2);
 	
-	byte opcode = emulator_ptr->fetch_next_byte(data.pc);
+	byte opcode = emulator_ptr->bus_read(data.pc);
 	data.pc++;
 
 	interrupt_pending = is_interrupt_pending(); //check opcodes on t 3 of fetch
@@ -138,7 +141,7 @@ byte CPU::fetch_opcode() {
 
 byte CPU::fetch_next_byte() {
 	emulator_ptr->tick_other_components(2);
-	byte value = emulator_ptr->fetch_next_byte(data.pc);
+	byte value = emulator_ptr->bus_read(data.pc);
 	data.pc++;
 
 	emulator_ptr->tick_other_components(2);
@@ -146,26 +149,13 @@ byte CPU::fetch_next_byte() {
 }
 
 //privates
-int CPU::HALT() {
-	if (interrupt_pending != 0 && !data.ime) {
-		halt_bug_next_instruction = true;
-		data.halted = false;
-
-		return cycles_NONE;
-	}
-
-	data.halted = true;
-
-	return cycles_NONE;
-}
-
 void CPU::internal_cycle_other_components() {
 	emulator_ptr->tick_other_components(4);
 }
 
 const byte CPU::is_interrupt_pending() {
 	byte IF = emulator_ptr->io_instant_read(io_IF);
-	byte IE = emulator_ptr->memory_instant_read(0xffff);
+	byte IE = emulator_ptr->bus_read(0xffff);
 
 	return ((IF & IE) & 0x1f);
 }
@@ -191,11 +181,11 @@ int CPU::handle_interupts(int& cycles) {
 		write_to_bus(data.sp, pc_high); //write pc high tick 4
 		cycles += 4;
 
+		interrupt_pending = is_interrupt_pending(); // recheck interrupts 
+
 		data.sp--;
 		write_to_bus(data.sp, pc_low); //write pc low tick 4
 		cycles += 4;
-
-		interrupt_pending = is_interrupt_pending();
 
 		int bit = -1;
 		for (int i = 0; i < 5; i++) {
@@ -206,7 +196,7 @@ int CPU::handle_interupts(int& cycles) {
 		}
 
 		bool cleared_ie = false;
-		int interrupt_vector = 0x0000;
+		ushort interrupt_vector = 0x0000;
 		switch (bit) {
 		case 0: interrupt_vector = 0x40; break; // V-Blank
 		case 1: interrupt_vector = 0x48; break; // LCD STAT
@@ -218,6 +208,8 @@ int CPU::handle_interupts(int& cycles) {
 		}
 
 		data.pc = interrupt_vector;
+
+		//if we havent cleared our interrupt on the push, clear the bit in IF to service interrupt
 		if (!cleared_ie) {
 			emulator_ptr->clear_interrupt(bit);
 		}

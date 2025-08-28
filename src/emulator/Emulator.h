@@ -18,21 +18,19 @@
 class Emulator {
 public:
 	//cli only const
-	Emulator(const bool& single_step_mode, const bool& using_boot_rom);
-	Emulator(const bool& using_SDL);
+	Emulator();
 	~Emulator();
 
-	bool set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr);
+	void set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr);
+	const bool is_using_boot_rom();
 
 	//emu control functions start/stop/run
-	int initialise_emu_instance(const std::string& rom_file_name);
-	void set_running(const bool& state);
 	void run_emulator();
 	void close_emulator();
 	const bool get_single_step_mode();
 
 	//init sdl 
-	bool initialise_SDL();
+	void initialise_SDL();
 
 	void render_texture(SDL_Texture* texture);
 	void clear_bg_renderer();
@@ -43,10 +41,10 @@ public:
 	void clear_interrupt(const int& interrupt);
 
 	//memory functions
-	byte fetch_next_byte(ushort& pc);
 	byte bus_read(const ushort& address);
 	void bus_write(const ushort& address, const byte& value);
 
+	//io read write
 	byte read_timer_io(const byte& timer_io);
 	void write_timer_io(const byte& timer_io, const byte& value);
 
@@ -55,7 +53,6 @@ public:
 	
 	byte io_instant_read(const io_addresses& io_target);
 	void io_instant_write(const io_addresses& io_target, const byte& value);
-	byte memory_instant_read(const ushort& address);
 
 	ppu_modes get_current_ppu_mode();
 
@@ -73,7 +70,7 @@ private:
 	SDL_Window* window = nullptr;
 	SDL_Renderer* renderer = nullptr;
 
-	bool using_SDL = false;
+	bool sdl_initialised = false;
 	bool sdl_running = false;
 
 	//control bools
@@ -83,6 +80,8 @@ private:
 	bool using_boot_rom = false;
 
 private:
+	int initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom);
+	void set_running(const bool& state);
 
 	bool load_rom_file(const std::string& file_name, std::vector<byte>& rom_file);
 	void parse_rom_file_header(rom_header& header, const std::vector<byte>& rom);

@@ -1398,6 +1398,18 @@ int CPU::RST_N8(ushort& sp, const byte& vector) {
 }
 
 //misc instructions
+int CPU::HALT() {
+	if (interrupt_pending != 0 && !data.ime) {
+		halt_bug_next_instruction = true;
+		data.halted = false;
+
+		return cycles_NONE;
+	}
+
+	data.halted = true;
+
+	return cycles_NONE;
+}
 
 int CPU::STOP() {
 	//todo
@@ -1411,7 +1423,6 @@ int CPU::DI() {
 }
 
 int CPU::EI() {
-	t = 2;
 	enable_ime_next_cycle = true;
 	return cycles_FOUR;
 }

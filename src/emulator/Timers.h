@@ -10,6 +10,8 @@ public:
 	Timers(std::shared_ptr<Emulator> emulator_ptr);
 	~Timers();
 
+	void reset_timers();
+
 	bool is_timers_initialised();
 	void timers_tick();
 
