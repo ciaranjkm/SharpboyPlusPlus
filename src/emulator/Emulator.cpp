@@ -1,54 +1,34 @@
 #include "Emulator.h"
 
-Emulator::Emulator(const bool& single_step_mode, const bool& using_boot_rom) {
-	this->initialised = false;
-	
-	//disable sdl for cli only, unable to use video, input and sound
 
-	this->using_SDL = false;
-	this->sdl_running = false;
-
-	this->single_step_test_mode = single_step_mode;
-	this->using_boot_rom = using_boot_rom;
-}
-
-Emulator::Emulator(const bool& using_SDL) {
-	this->using_boot_rom = true;
+Emulator::Emulator() {
+	this->using_boot_rom = false;
 	this->single_step_test_mode = false;
-
-	this->using_SDL = using_SDL;
-	if (!this->using_SDL) {
-		printf("[SB] Not creating SDL objects, exiting!\n");
-		this->initialised = false;
-		return;
-	}
 
 	this->initialised = true;
 }
 
 Emulator::~Emulator() {
+	printf("[SB] Shutting down EMU object.\n"); // this doesnt print to console when emu is destroyed??
 	//delete any pointers (fallback as already smart pointers) 
 	close_emulator();
-
-	printf("[SB] Shutting down EMU object.\n");
 }
 
-bool Emulator::set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr) {
+void Emulator::set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr) {
 	this->current_emulator_instance = emulator_ptr;
-	if (this->current_emulator_instance == nullptr) {
-		printf("[SB] Emulator is not valid, given nullptr!\n");
-		return false;
-	}
-	else {
-		return true;
-	}
 }
 
-int Emulator::initialise_emu_instance(const std::string& rom_file_name) {
+const bool Emulator::is_using_boot_rom() {
+	return &using_boot_rom;
+}
+
+int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom) {
 	if (this->single_step_test_mode) {
 		//done with for now will reimpliment later on 
 		return -255;
 	}
+
+	this->using_boot_rom = using_boot_rom;
 	
 	//load rom file into memory and optionally boot rom + parse for rom header
 
@@ -61,7 +41,6 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name) {
 	header = rom_header();
 	parse_rom_file_header(header, *rom_file_ptr);
 
-	this->using_boot_rom = false;
 	//load boot rom into memory
 	std::unique_ptr<std::array<byte, 0x100>> boot_rom_ptr = std::make_unique<std::array<byte, 0x100>>();
 	if (this->using_boot_rom) {
@@ -78,7 +57,7 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name) {
 		printf("[SB] CPU init failed, stopping.\n");
 		return -2;
 	}
-	CPU_ptr->reset_cpu(this->using_boot_rom, header.checksum_byte == 0);
+	CPU_ptr->reset_cpu(header.checksum_byte == 0);
 
 	//init mmu and reset it
 	current_emulator_instance->MMU_ptr = std::make_unique<MMU>(this->current_emulator_instance);
@@ -89,7 +68,7 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name) {
 		printf("[SB] MMU init failed, stopping.\n");
 		return -3;
 	}
-	MMU_ptr->reset_mmu(header, *rom_file_ptr, this->using_boot_rom, *boot_rom_ptr);
+	MMU_ptr->reset_mmu(header, *rom_file_ptr, *boot_rom_ptr);
 
 	//init timers and reset it 
 	current_emulator_instance->TIMER_ptr = std::make_unique<Timers>(this->current_emulator_instance);
@@ -101,9 +80,10 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name) {
 		printf("[SB] TIMER init failed, stopping.\n");
 		return -4;
 	}
+	TIMER_ptr->reset_timers();
 
 	//init ppu and reset it
-	current_emulator_instance->PPU_ptr = std::make_unique<PPU>(this->current_emulator_instance, this->using_SDL, renderer);
+	current_emulator_instance->PPU_ptr = std::make_unique<PPU>(this->current_emulator_instance, renderer);
 	if (!PPU_ptr->is_ppu_initialised()) {
 		CPU_ptr = nullptr;
 		MMU_ptr = nullptr;
@@ -113,9 +93,18 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name) {
 		printf("[SB] PPU init failed, stopping.\n");
 		return -5;
 	}
+	PPU_ptr->reset_ppu();
 
 	tick_other_components(4);
 	initialised = true;
+	printf("+----------------------------------------+\n");
+	printf("[SB] Success initialing emulator with %s\n", rom_file_name.c_str());
+	if (this->using_boot_rom) {
+		printf("[SB] Starting emulator now with boot rom!\n");
+	}
+	else {
+		printf("[SB] Starting emulator without boot rom!\n");
+	}
 
 	return 0;
 }
@@ -125,55 +114,23 @@ void Emulator::set_running(const bool& state) {
 }
 
 void Emulator::run_emulator() {
-	if (!initialised) {
-		printf("[SB] Not initialised can't run emulator!\n");
+	if (!sdl_initialised) {
+		printf("[SB] SDL initialised can't run emulator!\n");
 		return;
 	}
-	/*
-	if (!using_SDL) {
-		while (running) {
-			auto now = clock::now();
-			std::chrono::duration<double> elapsed = now - start_time;
 
-			long long expected_cycles = static_cast<long long>(elapsed.count() * CLOCKSPEED);
-
-			int cycles = 0;
-
-			while (emu_cycles < expected_cycles) {
-				CPU_ptr->step_cpu(cycles, false); 
-				emu_cycles += cycles;
-
-				if (!sdl_running || !running) {
-					break;
-				}
-			}
-
-			// show fps
-			
-			if (std::chrono::duration<double>(now - last_fps_time).count() >= 1.0) {
-				long long cyclesThisSecond = emu_cycles - cyclesAtLastReport;
-				std::cout << "Cycles this second: " << cyclesThisSecond << "\n";
-
-				cyclesAtLastReport = emu_cycles;
-				last_fps_time = now;
-			}
-			
-			// Tiny delay to yield CPU — optional
-			SDL_Delay(1);
-		}
-	}
-	*/
+	//todo
+	//temporary for testing, move to imgui button action and check for running emus first, work on ppu needed before this!
+	initialise_emu_instance("roms/PASSED/intr_timing.gb", true);
 
 	sdl_running = true;
-	running = true;
+	running = true; //todo change this not running by default
 
 	auto last_time = std::chrono::high_resolution_clock::now();
 	double cycles_pending = 0;
 
 	const double CLOCKSPEED = 4194304.0;
 	const double MILLISECONDS = 1000.0;
-
-	tick_other_components(4);
 
 	while (sdl_running) {
 		SDL_Event e;
@@ -184,6 +141,8 @@ void Emulator::run_emulator() {
 		}
 
 		if (running) {
+			//todo add function to start clock for emulator to run at correct speed and toggle a bool flag to stop function running again before emu is closed
+			//todo add all timing into a class maybe static so only 1 emu at a time?
 			auto now = std::chrono::high_resolution_clock::now();
 			double elapsed = std::chrono::duration<double, std::milli>(now - last_time).count();
 			last_time = now;
@@ -195,40 +154,39 @@ void Emulator::run_emulator() {
 				CPU_ptr->step_cpu(cycles_completed, false);
 				cycles_pending -= cycles_completed;
 			}
-			SDL_Delay(1);
 		}
 
-		SDL_Delay(16);
+		//cap to 60fps
+		SDL_Delay(1);
 	}
 
 	destroy_SDL_components(window, renderer);
 } 
 
 void Emulator::close_emulator() {
+	printf("+----------------------------------------+\n");
 	sdl_running = false;
 	running = false;
-
-	//destory emu components here first
 
 	PPU_ptr = nullptr;
 	MMU_ptr = nullptr;
 	TIMER_ptr = nullptr;
 	CPU_ptr = nullptr;
-
-	//do other shutdown here (sdl etc)
-	printf("shutdown emu\n");
 }
 
 const bool Emulator::get_single_step_mode() {
 	return &single_step_test_mode;
 }
 
-bool Emulator::initialise_SDL() {
-	bool initialised_SDL = false;
+void Emulator::initialise_SDL() {
+	sdl_initialised = false;
+	printf("+----------------------------------------+\n");
+	printf("[SB] Starting SDL initialisation...\n");
 
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		printf("[SB] Failed SDL initialisation, error: %s\n", SDL_GetError());
-		return initialised_SDL;
+		sdl_initialised = false;
+		return;
 	}
 	printf("[SB] SDL initialised\n");
 
@@ -237,7 +195,8 @@ bool Emulator::initialise_SDL() {
 		SDL_Quit();
 
 		printf("[SB] Failed SDL window initialisation, error: %s\n", SDL_GetError());
-		return initialised_SDL;
+		sdl_initialised = false;
+		return;
 	}
 	printf("[SB] SDL window initialised\n");
 
@@ -249,11 +208,16 @@ bool Emulator::initialise_SDL() {
 		SDL_Quit();
 
 		printf("[SB] Failed SDL renderer initialisation, error: %s\n", SDL_GetError());
-		return initialised_SDL;
+		sdl_initialised = false;
+		return;
 	}
 	printf("[SB] SDL renderer initialised\n");
 
-	return !initialised_SDL;
+
+	printf("[SB] SDL initialisation completed!\n");
+	printf("+----------------------------------------+\n");
+	sdl_initialised = true;
+	return;
 }
 
 void Emulator::render_texture(SDL_Texture* texture) {
@@ -272,11 +236,6 @@ void Emulator::tick_other_components(const int& cycles) {
 		MMU_ptr->dma_tick();
 		//apu.tick
 	}
-}
-
-byte Emulator::fetch_next_byte(ushort& pc) {
-	byte opcode = MMU_ptr->read_from_memory(pc);
-	return opcode;
 }
 
 byte Emulator::bus_read(const ushort& address) {
@@ -313,10 +272,6 @@ byte Emulator::io_instant_read(const io_addresses& io_target) {
 void Emulator::io_instant_write(const io_addresses& io_target, const byte& value) {
 	MMU_ptr->write_io(io_target, value);
 	return;
-}
-
-byte Emulator::memory_instant_read(const ushort& address) {
-	return MMU_ptr->unblocked_read(address);
 }
 
 ppu_modes Emulator::get_current_ppu_mode() {

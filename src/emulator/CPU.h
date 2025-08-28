@@ -39,17 +39,15 @@ public:
 	~CPU();
 
 	const bool is_cpu_initialised();
-	void reset_cpu(const bool& using_boot_rom, const bool& check_sum_zero);
+	void reset_cpu(const bool& check_sum_zero);
 
 	void step_cpu(int& cycles, const bool& print_debug_to_console);
-	//shutdown
 
 private:
 	void internal_cycle_other_components();
 	byte fetch_opcode();
 	byte fetch_next_byte();
 
-	//todo move interrupts to be checked every t cycle and do a flag to emu which can be checked rather than memory reads etc
 	const byte is_interrupt_pending();
 	int handle_interupts(int& cycles);
 
@@ -70,8 +68,6 @@ private:
 	cpu_data data;
 	bool enable_ime_next_cycle = false;
 	byte interrupt_pending = 0x00;
-
-	int t = 2;
 
 	bool halt_bug_next_instruction = false;
 private:

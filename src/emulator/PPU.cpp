@@ -1,24 +1,20 @@
 #include "PPU.h"
 #include "Emulator.h"
 
-PPU::PPU(std::shared_ptr<Emulator> emulator_ptr, const bool& using_SDL, SDL_Renderer* renderer) {
-	this->using_SDL = using_SDL;
-	if (this->using_SDL) {
-		this->renderer = renderer;
-		if (this->renderer != nullptr) {
-			background_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-			gb_colors = std::array<uint32_t, 4>{
-				0xffffffff,
-				0xd3d3d3d3,
-				0x222222ff,
-				0x000000ff
-			};
-		}
-		else {
-			this->using_SDL = false;
-			this->renderer = nullptr;
-		}
-	}
+PPU::PPU(std::shared_ptr<Emulator> emulator_ptr, SDL_Renderer* renderer) {
+    this->renderer = renderer;
+    if (this->renderer != nullptr) {
+        background_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+        gb_colors = std::array<uint32_t, 4>{
+            0xffffffff,
+            0xd3d3d3d3,
+            0x222222ff,
+            0x000000ff
+        };
+    }
+    else {
+        this->renderer = nullptr;
+    }
 
 	this->emulator_ptr = emulator_ptr;
 	if (this->emulator_ptr != nullptr) {
@@ -38,6 +34,34 @@ PPU::~PPU() {
 		SDL_DestroyTexture(background_texture);
 		background_texture = nullptr;
 	}
+
+    printf("[SB] Shutting down PPU object\n");
+}
+
+void PPU::reset_ppu() {
+    bool using_boot_rom = emulator_ptr->is_using_boot_rom();
+
+    lcdc = 0x00;
+    stat = 0x00;
+    scy = 0x00;
+    scx = 0x00;
+    ly = 0x00;
+    lyc = 0x00;
+    bgp = 0x00;
+    obp0 = 0x00;
+    obp1 = 0x00;
+
+    if (!using_boot_rom) {
+        return;
+    }
+
+    lcdc = 0x91;
+    stat = 0x85;
+    scy = 0x00;
+    scx = 0x00;
+    ly = 0x00;
+    lyc = 0x00;
+    bgp = 0xfc;
 }
 
 bool PPU::is_ppu_initialised() {
@@ -46,7 +70,7 @@ bool PPU::is_ppu_initialised() {
 
 void PPU::ppu_tick() {
     internal_cycles++;
-    /*
+   
     // Handle LCD enable/disable
     if (((lcdc & 0x80) != 0) && lcd_previously_off) {
         internal_cycles = 0;
@@ -66,7 +90,6 @@ void PPU::ppu_tick() {
         lcd_previously_off = true;
         return;
     }
-    */
 
     // Check LYC comparison (should happen every cycle LY changes)
     bool lyc_match = (ly == lyc);
@@ -235,7 +258,7 @@ void PPU::render_background_scanline() {
 		if ((lcdc & 0x08) != 0) {
 			tile_map_base_address = 0x9c00;
 		}
-		byte tile_number = emulator_ptr->memory_instant_read((ushort)(tile_map_base_address + tile_index));
+		byte tile_number = emulator_ptr->bus_read((ushort)(tile_map_base_address + tile_index));
 
 		ushort tile_data_base_address = 0x9000;
 		if ((lcdc & 0x10) != 0) {
@@ -249,13 +272,13 @@ void PPU::render_background_scanline() {
 
 		int line_in_tile = background_y & 7;
 
-		byte tile_low = emulator_ptr->memory_instant_read((ushort)(tile_address + (line_in_tile * 2)));
-		byte tile_high = emulator_ptr->memory_instant_read((ushort)(tile_address + (line_in_tile * 2) + 1));
+		byte tile_low = emulator_ptr->bus_read((ushort)(tile_address + (line_in_tile * 2)));
+		byte tile_high = emulator_ptr->bus_read((ushort)(tile_address + (line_in_tile * 2) + 1));
 
 		int bit_index = 7 - (background_x % 8);
 		int colour_bit = ((tile_high >> bit_index) & 0x01) << 1 | ((tile_low >> bit_index) & 0x1);
 
-		byte bgp = emulator_ptr->memory_instant_read((ushort)(0xff00 | io_BGP));
+		byte bgp = emulator_ptr->bus_read((ushort)(0xff00 | io_BGP));
 		int pallete_shift = colour_bit * 2;
 		int pallete_colour = (bgp >> pallete_shift) & 0x03;
 

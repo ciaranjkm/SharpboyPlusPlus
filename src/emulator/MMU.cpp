@@ -13,7 +13,7 @@ MMU::MMU(std::shared_ptr<Emulator> emulator_ptr) {
 
 MMU::~MMU() {
 	this->emulator_ptr = nullptr;
-	printf("[SB] Shutting down MMU object.\n");
+	printf("[SB] Shutting down MMU object\n");
 }
 
 //public
@@ -22,8 +22,8 @@ const bool MMU::is_mmu_initialised() {
 	return &initialised;
 }
 
-void MMU::reset_mmu(const rom_header& header, const std::vector<byte>& rom, const bool& using_boot_rom, const std::array<byte, 0x100>& boot_rom) {
-	this->using_boot_rom = using_boot_rom;
+void MMU::reset_mmu(const rom_header& header, const std::vector<byte>& rom, const std::array<byte, 0x100>& boot_rom) {
+	this->using_boot_rom = emulator_ptr->is_using_boot_rom();
 	
 	//use header to setup memory and set flags for mbc controllers
 	
@@ -37,18 +37,11 @@ void MMU::reset_mmu(const rom_header& header, const std::vector<byte>& rom, cons
 	}
 
 	memory.io.JOYP = 0xcf;
-	memory.io.DIV = 0x18;
 	memory.io.IF = 0xe1;
-	memory.io.LCDC = 0x91;
-	memory.io.STAT = 0x85;
-	memory.io.SCY = 0x00;
-	memory.io.SCX = 0x00;
-	memory.io.LY = 0x00;
-	memory.io.LYC = 0x00;
-	memory.io.BGP = 0xfc;
 	memory.io.BANK = 0x01;
 }
 
+//read/write with blocking of oam when dma or when ppu is active
 byte MMU::read_from_memory(const ushort& address) {
 	//printf("[SB] MMU read at %04X\n", address);
 	
@@ -165,6 +158,7 @@ void MMU::write_to_memory(const ushort& address, const byte& value) {
 	return;
 }
 
+//read/write without blocking of oam when dma or when ppu is active
 byte MMU::unblocked_read(const ushort& address) {
 	//printf("[SB] MMU read at %04X\n", address);
 
@@ -258,6 +252,7 @@ void MMU::unblocked_write(const ushort& address, const byte& value) {
 }
 
 byte MMU::read_io(const byte& io_target) {
+	//should the io be for timer/ppu, redirect the read
 	if (io_target >= io_DIV && io_target <= io_TAC) {
 		return emulator_ptr->read_timer_io(io_target);
 	}
@@ -278,6 +273,7 @@ byte MMU::read_io(const byte& io_target) {
 }
 
 void MMU::write_io(const byte& io_target, const byte& value) {
+	//should our io be for the timer/ppu, redirect the write
 	if (io_target >= io_DIV && io_target <= io_TAC) {
 		emulator_ptr->write_timer_io(io_target, value);
 		return;
@@ -293,12 +289,14 @@ void MMU::write_io(const byte& io_target, const byte& value) {
 		case io_SC: memory.io.SC = value; return;
 		case io_IF: memory.io.IF = value | 0xe0; return;
 
+		//start new dma on dma write
 		case io_DMA:
 			memory.io.DMA = value;
 			start_new_dma = true;
 			dma_delay = DEFAULT_DMA_DELAY;
 			return;
 
+		//remove boot rom if value written is 0x1 and using boot rom is true
 		case io_BANK:
 			if (value == 0x01) {
 				if (using_boot_rom) {
@@ -330,8 +328,10 @@ void MMU::swap_cartridge_and_boot_roms() {
 
 void MMU::dma_tick() {
 	if (start_new_dma) {
+		//tick down if we're starting a new dma
 		dma_delay--;
 
+		//if 1 m cycle has passed
 		if (dma_delay == 0) {
 			dma_active = true;
 			start_new_dma = false;
@@ -343,32 +343,31 @@ void MMU::dma_tick() {
 		}
 	}
 
+	
 	if (dma_active) {
-		total_dma_ticks++;
+		//increase ticks for dma
 		dma_ticks_this_cycles++;
 
+		//if one m cycle has passed
 		if (dma_ticks_this_cycles == 4) {
 			dma_ticks_this_cycles = 0;
 
+			//increase total cycles for dma to find when to stop
 			dma_cycles++;
-			byte dma_value = read_from_memory(dma_address++);
-			if (dma_cycles > 0) {
-				memory.oam[dma_cycles - 1] = dma_value;
-			}
 
-			//printf("dma copy dest: %d, source: %04X, value: %d\n", dma_cycles - 1, dma_address, dma_value);
+			//read the value and put into oam
+			byte dma_value = read_from_memory(dma_address++);
+			memory.oam[dma_cycles - 1] = dma_value;
 		}
 
-		if (!start_new_dma) {
-			if (dma_cycles == DMA_TOTAL_TICKS) {
-				dma_active = false;
-				dma_address = 0x0000;
-				dma_cycles = 0;
-				dma_ticks_this_cycles = 0;
-				dma_delay = 0;
-				total_dma_ticks = 0;
-			}
+		//if our total dma cycles is the total amount for a cycle, turn off dma and reset it
+		if (dma_cycles == DMA_TOTAL_TICKS) {
+			dma_active = false;
+			dma_address = 0x0000;
+			dma_cycles = 0;
+			dma_ticks_this_cycles = 0;
+			dma_delay = 0;
+			total_dma_ticks = 0;
 		}
 	}
-
 }

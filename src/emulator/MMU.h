@@ -28,28 +28,13 @@ struct io_map {
 	byte SB = 0x00;
 	byte SC = 0x00;
 
-	//timers + interrupts
-	byte DIV = 0x00;
-	byte TIMA = 0x00;
-	byte TMA = 0x00;
-	byte TAC = 0x00;
+	//interrupts
 	byte IF = 0x00;
 
 	//sound not impl
 
 	//ppu
-	byte LCDC = 0x00;
-	byte STAT = 0x00;
-	byte SCY = 0x00;
-	byte SCX = 0x00;
-	byte LY = 0x00;
-	byte LYC = 0x00;
 	byte DMA = 0x00;
-	byte BGP = 0x00;
-	byte OBP0 = 0x00;
-	byte OBP1 = 0x00;
-	byte WY = 0x00;
-	byte WX = 0x00;
 
 	//boot rom control
 	byte BANK = 0x00;
@@ -74,7 +59,7 @@ public:
 	~MMU();
 
 	const bool is_mmu_initialised();
-	void reset_mmu(const rom_header& header, const std::vector<byte>& rom, const bool& using_boot_rom, const std::array<byte, 0x100>& boot_rom);
+	void reset_mmu(const rom_header& header, const std::vector<byte>& rom, const std::array<byte, 0x100>& boot_rom);
 
 	byte read_from_memory(const ushort& address);
 	void write_to_memory(const ushort& address, const byte& value);
