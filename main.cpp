@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 	//temporary for testing, move to imgui button action and check for running emus first, work on ppu needed before this!
-	e->initialise_emu_instance("roms/PASSED/timer/tma_write_reloading.gb");
+	e->initialise_emu_instance("roms/PASSED/intr_timing.gb");
 	e->run_emulator();
 	e->close_emulator();
 	e = nullptr;

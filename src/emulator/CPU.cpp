@@ -191,11 +191,11 @@ int CPU::handle_interupts(int& cycles) {
 		write_to_bus(data.sp, pc_high); //write pc high tick 4
 		cycles += 4;
 
+		interrupt_pending = is_interrupt_pending(); // recheck interrupts 
+
 		data.sp--;
 		write_to_bus(data.sp, pc_low); //write pc low tick 4
 		cycles += 4;
-
-		interrupt_pending = is_interrupt_pending();
 
 		int bit = -1;
 		for (int i = 0; i < 5; i++) {
@@ -206,7 +206,7 @@ int CPU::handle_interupts(int& cycles) {
 		}
 
 		bool cleared_ie = false;
-		int interrupt_vector = 0x0000;
+		ushort interrupt_vector = 0x0000;
 		switch (bit) {
 		case 0: interrupt_vector = 0x40; break; // V-Blank
 		case 1: interrupt_vector = 0x48; break; // LCD STAT
@@ -218,6 +218,8 @@ int CPU::handle_interupts(int& cycles) {
 		}
 
 		data.pc = interrupt_vector;
+
+		//if we havent cleared our interrupt on the push, clear the bit in IF to service interrupt
 		if (!cleared_ie) {
 			emulator_ptr->clear_interrupt(bit);
 		}
