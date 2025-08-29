@@ -1,4 +1,5 @@
-#include "src/Emulator/Emulator.h"
+#include "src/Application.h"
+#include <iostream>
 
 //TODO REMOVE HEADLESS MODE 
 //REQUIRE SDL TO RUN
@@ -16,13 +17,12 @@ int main(int argc, char* argv[]) {
 
 	std::cout << art << std::endl;
 	
-	std::shared_ptr<Emulator> e = std::make_shared<Emulator>();
-	if (e == nullptr) {
+	std::shared_ptr<Application> app = std::make_shared<Application>();
+	
+	if (!app->is_app_running()) {
 		return -1;
 	}
 
-	e->set_emu_pointer(e);
-	e->initialise_SDL();
-	e->run_emulator();
-	e->close_emulator();
+	app->set_application_pointer(app);
+	app->run();
 }

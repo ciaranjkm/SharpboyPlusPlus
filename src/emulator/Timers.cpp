@@ -100,7 +100,7 @@ byte Timers::read_timer_io(const byte& timer_io) {
 	}
 }
 
-void Timers::write_timer_io(const byte& timer_io, const byte& value) {
+void Timers::io_instant_write(const byte& timer_io, const byte& value) {
 	switch (timer_io) {
 	case io_DIV: 
 		internal_div = 0x0000; 

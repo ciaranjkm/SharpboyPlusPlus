@@ -77,7 +77,7 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 	}
 	*/
 	
-	if (false) {
+	if (print_debug_to_console) {
 		byte one = emulator_ptr->bus_read(data.pc);
 		byte two = emulator_ptr->bus_read(data.pc + 1);
 		byte three = emulator_ptr->bus_read(data.pc + 2);

@@ -18,7 +18,7 @@ public:
 	void stop_tima_reload();
 
 	byte read_timer_io(const byte& timer_io);
-	void write_timer_io(const byte& timer_io, const byte& value);
+	void io_instant_write(const byte& timer_io, const byte& value);
 
 private:
 	std::shared_ptr<Emulator> emulator_ptr;

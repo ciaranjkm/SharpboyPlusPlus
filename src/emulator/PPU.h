@@ -9,20 +9,21 @@ class Emulator;
 
 class PPU {
 public:
-	PPU(std::shared_ptr<Emulator> emulator_ptr, SDL_Renderer* renderer);
+	PPU(std::shared_ptr<Emulator> emulator_ptr);
 	~PPU();
 
 	void reset_ppu();
-
 	bool is_ppu_initialised();
 	void ppu_tick();
 
 	byte read_ppu_io(const byte& ppu_io);
-	void write_ppu_io(const byte& ppu_io, const byte& value);
-
+	void io_instant_write(const byte& ppu_io, const byte& value);
 	ppu_modes get_current_mode();
-	bool is_draw_read();
+
+	bool is_draw_ready();
 	void reset_draw_ready();
+
+	const std::array<uint32_t, 160 * 144>& get_bg_frame_buffer();
 
 private:
 	std::shared_ptr<Emulator> emulator_ptr = nullptr;
@@ -59,10 +60,8 @@ private:
 	std::array<uint32_t, 4> gb_colors = std::array<uint32_t, 4>();
 
 	//sdl components, textures for rendering -> call emulator methods with textures as params to render
-	SDL_Renderer* renderer = nullptr;
-	SDL_Texture* background_texture = nullptr;
 
 private:
-	void render_background_scanline();
-	void render_texture();
+	void draw_background_scanline();
+	void draw_frame();
 };

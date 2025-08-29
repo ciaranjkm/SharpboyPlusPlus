@@ -1,21 +1,14 @@
 #include "PPU.h"
 #include "Emulator.h"
 
-PPU::PPU(std::shared_ptr<Emulator> emulator_ptr, SDL_Renderer* renderer) {
-    this->renderer = renderer;
-    if (this->renderer != nullptr) {
-        background_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-        gb_colors = std::array<uint32_t, 4>{
+PPU::PPU(std::shared_ptr<Emulator> emulator_ptr) {
+    gb_colors = std::array<uint32_t, 4>{
             0xffffffff,
             0xd3d3d3d3,
             0x222222ff,
             0x000000ff
-        };
-    }
-    else {
-        this->renderer = nullptr;
-    }
-
+    };
+        
 	this->emulator_ptr = emulator_ptr;
 	if (this->emulator_ptr != nullptr) {
 		initialised = true;
@@ -28,12 +21,6 @@ PPU::PPU(std::shared_ptr<Emulator> emulator_ptr, SDL_Renderer* renderer) {
 
 PPU::~PPU() {
 	this->emulator_ptr = nullptr;
-	this->renderer = nullptr;
-
-	if (background_texture != nullptr) {
-		SDL_DestroyTexture(background_texture);
-		background_texture = nullptr;
-	}
 
     printf("[SB] Shutting down PPU object\n");
 }
@@ -131,7 +118,7 @@ void PPU::ppu_tick() {
 
             // Render the current line
             if (ly < 144) {
-               render_background_scanline();
+               draw_background_scanline();
             }
         }
         break;
@@ -157,7 +144,7 @@ void PPU::ppu_tick() {
                 }
 
                 // Render the complete frame
-                render_texture();
+                draw_frame();
             }
             else {
                 // Going to next line - back to OAM search
@@ -213,7 +200,7 @@ byte PPU::read_ppu_io(const byte& ppu_io) {
     }
 }
 
-void PPU::write_ppu_io(const byte& ppu_io, const byte& value) {
+void PPU::io_instant_write(const byte& ppu_io, const byte& value) {
     switch (ppu_io) {
     case io_LY: ly = value; return;
     case io_LYC: lyc = value; return;
@@ -234,14 +221,19 @@ ppu_modes PPU::get_current_mode() {
 	return current_mode;
 }
 
-bool PPU::is_draw_read() {
+bool PPU::is_draw_ready() {
     return draw_ready;
 }
+
 void PPU::reset_draw_ready() {
     draw_ready = false;
 }
 
-void PPU::render_background_scanline() {
+const std::array<uint32_t, 160 * 144>& PPU::get_bg_frame_buffer() {
+    return background_pixel_buffer;
+}
+
+void PPU::draw_background_scanline() {
 	//bg and window enable bit
 	if ((lcdc & 0x01) == 0) {
 		for (int i = 0; i < SCREEN_WIDTH; i++) {
@@ -293,9 +285,7 @@ void PPU::render_background_scanline() {
 	}
 }
 
-void PPU::render_texture() {
-	SDL_RenderClear(renderer);
-	SDL_UpdateTexture(background_texture, NULL, background_pixel_buffer.data(), SCREEN_WIDTH * sizeof(uint32_t));
-	SDL_RenderTexture(renderer, background_texture, NULL, NULL);
+void PPU::draw_frame() {
+    //call method in emu which can call application to render a new frame when needed
     draw_ready = true;
 }

@@ -11,199 +11,6 @@ Emulator::~Emulator() {
 	printf("[SB] Shutting down EMU object.\n"); // this doesnt print to console when emu is destroyed??
 	//delete any pointers (fallback as already smart pointers) 
 	close_emulator();
-	close_imgui();
-	destroy_SDL_components(window, renderer);
-}
-
-
-
-void Emulator::set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr) {
-	this->current_emulator_instance = emulator_ptr;
-}
-
-bool Emulator::is_using_boot_rom() {
-	return using_boot_rom;
-}
-
-void Emulator::run_emulator() {
-	if (!sdl_initialised) {
-		printf("[SB] SDL initialised can't run emulator!\n");
-		return;
-	}
-
-	//todo
-	//temporary for testing, move to imgui button action and check for running emus first, work on ppu needed before this!
-	initialise_emu_instance("roms/PASSED/instr_timing.gb", false);
-	emulator_running = true; //todo change this not running by default
-
-	sdl_running = true;
-
-	//todo add function to start clock for emulator to run at correct speed and toggle a bool flag to stop function running again before emu is closed
-	auto last_time = std::chrono::high_resolution_clock::now();
-	double cycles_pending = 0;
-
-	const double CLOCKSPEED = 4194304.0;
-	const double MILLISECONDS = 1000.0;
-
-	while (sdl_running) {
-		SDL_Event e;
-		poll_SDL_events(&e, current_emulator_instance);
-
-		if (!sdl_running) {
-			break;
-		}
-		if (show_imgui) {
-			render_imgui();
-		}
-
-		//drawimgui
-
-		if (emulator_running) {
-			//todo add all timing into a class maybe static so only 1 emu at a time?
-			auto now = std::chrono::high_resolution_clock::now();
-			double elapsed = std::chrono::duration<double, std::milli>(now - last_time).count();
-			last_time = now;
-
-			cycles_pending = (CLOCKSPEED / MILLISECONDS) * elapsed;
-
-			while (cycles_pending >= 1.0) {
-				int cycles_completed = 0;
-				CPU_ptr->step_cpu(cycles_completed, false);
-				cycles_pending -= cycles_completed;
-			}
-
-			if (PPU_ptr->is_draw_read()) {
-				if (show_imgui) {
-					ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-				}
-
-				SDL_RenderPresent(renderer);
-
-				PPU_ptr->reset_draw_ready();
-			}
-		}
-		else {
-			SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
-			SDL_RenderClear(renderer);
-
-			if (show_imgui) {
-				ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-			}
-
-			SDL_RenderPresent(renderer);
-		}
-
-
-		//render gameboy
-
-		//renderimgui
-
-		//delay to slow cpu a bit
-		SDL_Delay(1);
-	}
-
-	close_imgui();
-	destroy_SDL_components(window, renderer);
-}
-
-void Emulator::close_emulator() {
-	printf("+----------------------------------------+\n");
-	sdl_running = false;
-	emulator_running = false;
-
-	PPU_ptr = nullptr;
-	MMU_ptr = nullptr;
-	TIMER_ptr = nullptr;
-	CPU_ptr = nullptr;
-}
-
-void Emulator::set_running(const bool& state) {
-	emulator_running = state;
-}
-
-bool Emulator::get_single_step_mode() {
-	return single_step_test_mode;
-}
-
-
-
-void Emulator::initialise_SDL() {
-	initialise_SDL_components(sdl_initialised, &window, &renderer);
-}
-
-void Emulator::toggle_show_imgui() {
-	show_imgui = !show_imgui;
-}
-
-
-
-void Emulator::tick_other_components(const int& cycles) {
-	for (int i = 0; i < cycles; i++) {
-		TIMER_ptr->timers_tick();
-		PPU_ptr->ppu_tick();
-		MMU_ptr->dma_tick();
-		//apu.tick
-	}
-}
-
-void Emulator::trigger_interrupt(const interrupt_types& interrupt) {
-	if (interrupt >= int_VBLANK && interrupt <= int_JOYPAD) {
-		byte IF = io_instant_read(io_IF);
-		IF = IF | (1 << interrupt);
-		io_instant_write(io_IF, IF);
-	}
-}
-
-void Emulator::clear_interrupt(const int& interrupt) {
-	if (interrupt >= int_VBLANK && interrupt <= int_JOYPAD) {
-		byte IF = io_instant_read(io_IF);
-		IF = IF & ~(1 << interrupt);
-		io_instant_write(io_IF, IF);
-	}
-}
-
-
-
-byte Emulator::bus_read(const ushort& address) {
-	byte value = MMU_ptr->read_from_memory(address);
-	return value;
-}
-
-void Emulator::bus_write(const ushort& address, const byte& value) {
-	MMU_ptr->write_to_memory(address, value);
-}
-
-byte Emulator::read_timer_io(const byte& timer_io) {
-	return TIMER_ptr->read_timer_io(timer_io);
-}
-
-void Emulator::write_timer_io(const byte& timer_io, const byte& value) {
-	TIMER_ptr->write_timer_io(timer_io, value);
-	return;
-}
-
-byte Emulator::read_ppu_io(const byte& ppu_io) {
-	return PPU_ptr->read_ppu_io(ppu_io);
-}
-
-void Emulator::write_ppu_io(const byte& ppu_io, const byte& value) {
-	PPU_ptr->write_ppu_io(ppu_io, value);
-	return;
-}
-
-byte Emulator::io_instant_read(const io_addresses& io_target) {
-	return MMU_ptr->read_io(io_target);
-}
-
-void Emulator::io_instant_write(const io_addresses& io_target, const byte& value) {
-	MMU_ptr->write_io(io_target, value);
-	return;
-}
-
-
-
-ppu_modes Emulator::get_current_ppu_mode() {
-	return PPU_ptr->get_current_mode();
 }
 
 int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom) {
@@ -266,7 +73,7 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 	TIMER_ptr->reset_timers();
 
 	//init ppu and reset it
-	current_emulator_instance->PPU_ptr = std::make_unique<PPU>(this->current_emulator_instance, renderer);
+	current_emulator_instance->PPU_ptr = std::make_unique<PPU>(this->current_emulator_instance);
 	if (!PPU_ptr->is_ppu_initialised()) {
 		CPU_ptr = nullptr;
 		MMU_ptr = nullptr;
@@ -293,6 +100,114 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 	}
 
 	return 0;
+}
+
+void Emulator::set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr) {
+	this->current_emulator_instance = emulator_ptr;
+}
+
+bool Emulator::is_using_boot_rom() {
+	return using_boot_rom;
+}
+
+void Emulator::close_emulator() {
+	printf("+----------------------------------------+\n");
+
+	PPU_ptr = nullptr;
+	MMU_ptr = nullptr;
+	TIMER_ptr = nullptr;
+	CPU_ptr = nullptr;
+}
+
+
+
+int Emulator::run_next_instruction() {
+	int cycles_completed = 0;
+	CPU_ptr->step_cpu(cycles_completed, false);
+	return cycles_completed;
+}
+
+
+
+void Emulator::tick_other_components(const int& cycles) {
+	for (int i = 0; i < cycles; i++) {
+		TIMER_ptr->timers_tick();
+		PPU_ptr->ppu_tick();
+		MMU_ptr->dma_tick();
+		//apu.tick
+	}
+}
+
+void Emulator::trigger_interrupt(const interrupt_types& interrupt) {
+	if (interrupt >= int_VBLANK && interrupt <= int_JOYPAD) {
+		byte IF = io_instant_read(io_IF);
+		IF = IF | (1 << interrupt);
+		io_instant_write(io_IF, IF);
+	}
+}
+
+void Emulator::clear_interrupt(const int& interrupt) {
+	if (interrupt >= int_VBLANK && interrupt <= int_JOYPAD) {
+		byte IF = io_instant_read(io_IF);
+		IF = IF & ~(1 << interrupt);
+		io_instant_write(io_IF, IF);
+	}
+}
+
+
+
+byte Emulator::bus_read(const ushort& address) {
+	byte value = MMU_ptr->read_from_memory(address);
+	return value;
+}
+
+void Emulator::bus_write(const ushort& address, const byte& value) {
+	MMU_ptr->write_to_memory(address, value);
+}
+
+byte Emulator::io_instant_read(const byte& io_target) {
+	if (io_target >= io_DIV && io_target <= io_TAC) {
+		return TIMER_ptr->read_timer_io(io_target);
+	}
+	else if (io_target >= io_LCDC && io_target <= io_WX && io_target != io_DMA) {
+		return PPU_ptr->read_ppu_io(io_target);
+	}
+	else {
+		return MMU_ptr->read_io(io_target);
+	}
+}
+
+void Emulator::io_instant_write(const byte& io_target, const byte& value) {
+	if (io_target >= io_DIV && io_target <= io_TAC) {
+		TIMER_ptr->io_instant_write(io_target, value);
+		return;
+	}
+	else if (io_target >= io_LCDC && io_target <= io_WX && io_target != io_DMA) {
+		PPU_ptr->io_instant_write(io_target, value);
+		return;
+	}
+	else {
+		MMU_ptr->write_io(io_target, value);
+		return;
+	}
+}
+
+
+
+ppu_modes Emulator::get_current_ppu_mode() {
+	return PPU_ptr->get_current_mode();
+}
+
+const std::array<uint32_t, 160 * 144>& Emulator::get_frame_buffer() {
+	return PPU_ptr->get_bg_frame_buffer();
+}
+
+bool Emulator::draw_ready() {
+	return PPU_ptr->is_draw_ready();
+}
+
+void Emulator::reset_draw_ready() {
+	PPU_ptr->reset_draw_ready();
 }
 
 bool Emulator::load_rom_file(const std::string& file_name, std::vector<byte>& rom) {

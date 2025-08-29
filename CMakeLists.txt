@@ -51,7 +51,7 @@ if(NOT imgui_POPULATED)
 endif()
 
 # Add source to this project's executable.
-add_executable (SharpboyPlusPlus "main.cpp" "src/externals/nlohmann/json.hpp" "src/emulator/Emulator.h" "src/emulator/Emulator.cpp" "src/emulator/CPU.h" "src/emulator/CPU.cpp" "src/emulator/MMU.h" "src/emulator/MMU.cpp" "src/emulator/Instruction_definitions.cpp" "src/emulator/Timers.h" "src/emulator/Timers.cpp" "src/emulator/PPU.h" "src/emulator/PPU.cpp"  "src/emulator/emu_visuals/Graphics.h" "src/emulator/emu_visuals/Graphics.cpp")
+add_executable (SharpboyPlusPlus "main.cpp" "src/externals/nlohmann/json.hpp" "src/emulator/Emulator.h" "src/emulator/Emulator.cpp" "src/emulator/CPU.h" "src/emulator/CPU.cpp" "src/emulator/MMU.h" "src/emulator/MMU.cpp" "src/emulator/Instruction_definitions.cpp" "src/emulator/Timers.h" "src/emulator/Timers.cpp" "src/emulator/PPU.h" "src/emulator/PPU.cpp"  "src/emulator/emu_visuals/Graphics.h" "src/emulator/emu_visuals/Graphics.cpp" "src/Application.h" "src/Application.cpp")
 
 target_link_libraries(SharpboyPlusPlus PRIVATE SDL3::SDL3 ImGui)
 
