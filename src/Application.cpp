@@ -1,19 +1,20 @@
 #include "Application.h"
 
 Application::Application() {
-	initialise_SDL_components(sdl_running, &window, &renderer, &texture);
+	init_main_SDL_components(sdl_running, &window, &renderer, &texture);
 }
 
 Application::~Application() {
 	//close emulator if its still open
 
 	close_imgui();
-	close_SDL(&window, &renderer);
+	close_SDL(&window, &renderer, &texture);
 
 	window = nullptr;
 	renderer = nullptr;
 }
 
+//init
 void Application::set_application_pointer(std::shared_ptr<Application> app) {
 	self = app;
 }
@@ -22,6 +23,7 @@ bool Application::is_app_running() {
 	return sdl_running;
 }
 
+//instance control
 void Application::create_new_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom) {
 	if (instance != nullptr || emu_running) {
 		printf("[SB] Already an instance running, close this one first before starting a new one!\n");
@@ -40,10 +42,10 @@ void Application::create_new_emu_instance(const std::string& rom_file_name, cons
 
 void Application::close_emu_instance() {
 	if (instance == nullptr) {
-		printf("[SB] No instance currently running, open one to close it!\n");
 		return;
 	}
 
+	instance->close_emulator();
 	instance.reset();
 	instance = nullptr;
 
@@ -52,105 +54,112 @@ void Application::close_emu_instance() {
 	printf("[SB] Closed emu instance successfully!\n");
 }
 
+//main loop
 void Application::run() {
-    // Create Game Boy render texture (do this once during initialization)
-    SDL_Texture* gb_texture = SDL_CreateTexture(renderer,
-        SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+	const int GB_CPU_CLOCKSPEED = 4194304;
+	auto last_time = std::chrono::high_resolution_clock::now();
 
-    if (!gb_texture) {
-        printf("Failed to create Game Boy texture: %s\n", SDL_GetError());
-        // Handle error
-    }
-
-    // Timing variables
-    double cycle_accumulator = 0.0;
-    double display_accumulator = 0.0;
-    auto last_time = std::chrono::high_resolution_clock::now();
-    bool new_gb_frame_available = false;
-    const double GB_CPU_FREQ = 4194304.0;
-    const double DISPLAY_FPS = 144.0; // Your display refresh rate
-    const double DISPLAY_FRAME_TIME = 1.0 / DISPLAY_FPS;
-
-    // Define where to draw the Game Boy screen (scale it up)
-    SDL_FRect gb_display_rect = { 50, 50, 320, 288 }; // 2x scale, adjust as needed
+	bool started_timing = false;
 
     while (sdl_running) {
-        auto current_time = std::chrono::high_resolution_clock::now();
-        double delta_time = std::chrono::duration<double>(current_time - last_time).count();
-        last_time = current_time;
-
-        // Handle events
+		//poll events for sdl
         SDL_Event event;
         poll_SDL_events(&event, self);
         if (!sdl_running) break;
 
+		//clear background and render ui
+		clear_background(&renderer, 0, 0, 0, 255);
         if (!imgui_hidden) {
-            draw_imgui();
+            draw_imgui(self);
         }
 
-        // === GAME BOY EMULATION (runs at GB speed) ===
         if (emu_running) {
-            cycle_accumulator += delta_time * GB_CPU_FREQ;
+			if (!started_timing) {
+				started_timing = true;
+				last_time = std::chrono::high_resolution_clock::now();
+			}
 
-            while (cycle_accumulator > 0) {
-                int cycles = instance->run_next_instruction();
-                cycle_accumulator -= cycles;
+			auto current_time = std::chrono::high_resolution_clock::now();
+			auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - last_time);
 
-                if (instance->draw_ready()) {
-                    new_gb_frame_available = true;
-                    instance->reset_draw_ready();
-                }
+			int cycles_to_execute = (elapsed.count() * GB_CPU_CLOCKSPEED) / 1000000000;
+
+            while (cycles_to_execute > 0) {
+				int cycles = 0;
+                cycles += instance->run_next_instruction();
+				cycles_to_execute -= cycles;
+
+				//update gb screen when a new frame is ready (on vblank)
+				if (instance->draw_ready()) {
+					update_gb_texture(&texture, &renderer, self);
+					instance->reset_draw_ready();
+				}
+
+				last_time = current_time;
             }
 
-            // Update Game Boy texture when we have a new frame
-            if (new_gb_frame_available) {
-                // Set render target to Game Boy texture
-                SDL_SetRenderTarget(renderer, gb_texture);
-
-                // Draw Game Boy frame buffer to texture
-                draw_frame_buffer(instance->get_frame_buffer(), &gb_texture, &renderer);
-
-                // Reset render target back to screen
-                SDL_SetRenderTarget(renderer, NULL);
-
-                new_gb_frame_available = false;
-            }
+			//draw our gb texture every frame to avoid tearing
+			draw_gb_frame(&texture, &renderer);
         }
+		else {
+			started_timing = false;
+		}
 
-        // === DISPLAY RENDERING (runs at display refresh rate) ===
-        display_accumulator += delta_time;
-        if (display_accumulator >= DISPLAY_FRAME_TIME) {
-            display_accumulator -= DISPLAY_FRAME_TIME;
+		//render imgui for the main window (load/save rom etc)
+		if (!imgui_hidden) {
+			render_imgui(&renderer);
+		}
 
-            // Clear the screen
-            SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
-            SDL_RenderClear(renderer);
+		//present renderers
+		present_renderer(&renderer);
 
-            if (emu_running) {
-                // Draw the Game Boy texture to screen (scaled up)
-                SDL_RenderTexture(renderer, gb_texture, NULL, &gb_display_rect);
-            }
-
-            // Draw GUI on top
-            if (!imgui_hidden) {
-                render_imgui(&renderer);
-            }
-
-            // Present everything to screen
-            SDL_RenderPresent(renderer);
-        }
-
-        std::this_thread::sleep_for(std::chrono::duration<double>(0.01));
+		//delay for 1ms to sleep cpu a bit
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
 
+	close_emu_instance();
+
 	close_imgui();
-	close_SDL(&window, &renderer);
+	close_SDL(&window, &renderer, &texture);
 }
 
 void Application::close() {
 	sdl_running = false;
 }
 
+//imgui + sdl helper functions
 void Application::toggle_imgui_shown() {
 	imgui_hidden = !imgui_hidden;
+}
+
+const std::array<uint32_t, 160 * 144>& Application::get_frame_buffer() {
+	return instance->get_frame_buffer();
+}
+
+const std::vector<std::string>& Application::get_rom_file_names() {
+	return rom_file_names;
+}
+
+void Application::refresh_rom_file_names() {
+	const char rom_path[] = "roms/";
+	rom_file_names.clear();
+	rom_file_names.push_back("=== ROMS ===");
+
+	if (!std::filesystem::exists(rom_path)) {
+		if (!std::filesystem::create_directory(rom_path)) {
+			printf("[SHARPBOY]:: Unable to create roms directory, try creating one manually.\n");
+			return;
+		}
+
+		printf("[SHARPBOY]:: ROM path does not exist, creating a folder in the root directory of SHARPBOY.\n");
+		return;
+	}
+
+	for (const auto& entry : std::filesystem::directory_iterator(rom_path)) {
+		if (entry.is_regular_file() && entry.path().extension() == ".gb") {
+			rom_file_names.push_back(entry.path().string());
+		}
+	}
+
+	printf("[SHARPBOY]:: Success loading roms from %s.\n", rom_path);
 }

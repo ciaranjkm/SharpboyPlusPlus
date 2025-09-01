@@ -12,7 +12,9 @@ MMU::MMU(std::shared_ptr<Emulator> emulator_ptr) {
 }
 
 MMU::~MMU() {
+	this->emulator_ptr.reset();
 	this->emulator_ptr = nullptr;
+
 	printf("[SB] Shutting down MMU object\n");
 }
 

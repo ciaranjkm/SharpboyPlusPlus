@@ -13,6 +13,7 @@ Timers::Timers(std::shared_ptr<Emulator> emulator_ptr) {
 }
 
 Timers::~Timers() {
+	this->emulator_ptr.reset();
 	this->emulator_ptr = nullptr;
 
 	printf("[SB] Shutting down TIMERS object\n");

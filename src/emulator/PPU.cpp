@@ -20,7 +20,8 @@ PPU::PPU(std::shared_ptr<Emulator> emulator_ptr) {
 }
 
 PPU::~PPU() {
-	this->emulator_ptr = nullptr;
+    this->emulator_ptr.reset();
+    this->emulator_ptr = nullptr;
 
     printf("[SB] Shutting down PPU object\n");
 }
@@ -57,7 +58,7 @@ bool PPU::is_ppu_initialised() {
 
 void PPU::ppu_tick() {
     internal_cycles++;
-   
+
     // Handle LCD enable/disable
     if (((lcdc & 0x80) != 0) && lcd_previously_off) {
         internal_cycles = 0;
@@ -73,6 +74,7 @@ void PPU::ppu_tick() {
             ly = 0;
             current_mode = ppu_HBLANK;
             stat = (stat & 0xFC) | current_mode;
+            blocked_vram = true;
         }
         lcd_previously_off = true;
         return;
@@ -83,7 +85,7 @@ void PPU::ppu_tick() {
     if (lyc_match) {
         stat |= 0x04;  // Set LYC flag
         if ((stat & 0x40) != 0) {  // LYC interrupt enabled
-           emulator_ptr->trigger_interrupt(int_LCD);
+            emulator_ptr->trigger_interrupt(int_LCD);
         }
     }
     else {
@@ -92,94 +94,78 @@ void PPU::ppu_tick() {
 
     switch (current_mode) {
     case ppu_OAM_SEARCH:
-        if (internal_cycles >= 80) {
-            internal_cycles -= 80;
+        if (internal_cycles == 80) {
             current_mode = ppu_DRAW_MODE;
 
-            // Update STAT mode
-            stat = (stat & 0xFC) | current_mode;
+            clear_fifo(bg_fifo_queue);
+            onscreen_x = 0;
+            bg_fifo_x = 0;
+            primed_fifo = false;
 
-            // No STAT interrupt for entering draw mode
+            stat = (stat & 0xFC) | current_mode;
         }
-        break;
+        return;
 
     case ppu_DRAW_MODE:
-        if (internal_cycles >= 172) {
-            internal_cycles -= 172;
-            current_mode = ppu_HBLANK;
+        bg_fetcher_tick();
+        output_bg_pixel();        
 
-            // Update STAT mode
-            stat = (stat & 0xFC) | current_mode;
-
-            // Trigger STAT interrupt if H-blank interrupt enabled
-            if ((stat & 0x08) != 0) {
-                emulator_ptr->trigger_interrupt(int_LCD);
-            }
-
-            // Render the current line
-            if (ly < 144) {
-               draw_background_scanline();
-            }
+        if (onscreen_x >= SCREEN_WIDTH) {
+            current_mode = ppu_HBLANK; 
         }
-        break;
+
+        return;
 
     case ppu_HBLANK:
-        if (internal_cycles >= 204) {  // FIXED: was checking >= 24
-            internal_cycles -= 204;
+        if (internal_cycles == 456) {  
+            internal_cycles -= 456;
             ly++;
 
             if (ly == 144) {
-                // Entering V-blank
                 current_mode = ppu_VBLANK;
 
-                // Update STAT mode
                 stat = (stat & 0xFC) | current_mode;
 
-                // Trigger V-blank interrupt
                 emulator_ptr->trigger_interrupt(int_VBLANK);
 
-                // Trigger STAT interrupt if V-blank STAT interrupt enabled
                 if ((stat & 0x10) != 0) {
                     emulator_ptr->trigger_interrupt(int_LCD);
                 }
 
-                // Render the complete frame
-                draw_frame();
+                draw_ready = true;
             }
             else {
-                // Going to next line - back to OAM search
                 current_mode = ppu_OAM_SEARCH;
 
-                // Update STAT mode
                 stat = (stat & 0xFC) | current_mode;
 
-                // Trigger STAT interrupt if OAM interrupt enabled
                 if ((stat & 0x20) != 0) {
                     emulator_ptr->trigger_interrupt(int_LCD);
                 }
             }
         }
-        break;
+        return;
 
     case ppu_VBLANK:
-        if (internal_cycles >= 456) {  // Full scanline length
+        if (internal_cycles >= 456) {  
             internal_cycles -= 456;
             ly++;
 
-            if (ly == 154) {  // After line 153, reset to 0
+            if (ly == 154) { 
                 ly = 0;
+
                 current_mode = ppu_OAM_SEARCH;
 
-                // Update STAT mode
                 stat = (stat & 0xFC) | current_mode;
 
-                // Trigger STAT interrupt if OAM interrupt enabled
                 if ((stat & 0x20) != 0) {
                     emulator_ptr->trigger_interrupt(int_LCD);
                 }
+
+                blocked_vram = false;
             }
         }
-        break;
+        return;
     }
 }
 
@@ -233,59 +219,156 @@ const std::array<uint32_t, 160 * 144>& PPU::get_bg_frame_buffer() {
     return background_pixel_buffer;
 }
 
-void PPU::draw_background_scanline() {
-	//bg and window enable bit
-	if ((lcdc & 0x01) == 0) {
-		for (int i = 0; i < SCREEN_WIDTH; i++) {
-			background_pixel_buffer[ly * SCREEN_WIDTH + i] = gb_colors[0]; //render white to scanline when bit is cleared
-		}
-		return;
-	}
+ushort PPU::get_tile_address_from_id(const byte& tile_id) {
+    ushort tile_address = 0x0000;
+    ushort tile_data_base_address = 0x9000;
+    if ((lcdc & 0x10) != 0) {
+        tile_data_base_address = 0x8000;
+        tile_address = (tile_data_base_address + current_pixel_id * 16);
+    }
+    else {
+        sbyte signed_tile_number = (sbyte)current_pixel_id;
+        tile_address = (tile_data_base_address + signed_tile_number * 16);
+    }
 
-	for (int x = 0; x < SCREEN_WIDTH; x++) {
-        int background_x = (scx + x) % 256;
-		int background_y = (scy + ly) % 256;
-
-		int tile_x = background_x / 8;
-		int tile_y = background_y / 8;
-
-		int tile_index = tile_y * 32 + tile_x;
-
-		ushort tile_address = 0x0000;
-
-		ushort tile_map_base_address = 0x9800;
-		if ((lcdc & 0x08) != 0) {
-			tile_map_base_address = 0x9c00;
-		}
-		byte tile_number = emulator_ptr->bus_read((ushort)(tile_map_base_address + tile_index));
-
-		ushort tile_data_base_address = 0x9000;
-		if ((lcdc & 0x10) != 0) {
-			tile_data_base_address = 0x8000;
-			tile_address = (tile_data_base_address + tile_number * 16);
-		}
-		else {
-			sbyte signed_tile_number = (sbyte)tile_number;
-			tile_address = (tile_data_base_address + signed_tile_number * 16);
-		}
-
-		int line_in_tile = background_y & 7;
-
-		byte tile_low = emulator_ptr->bus_read((ushort)(tile_address + (line_in_tile * 2)));
-		byte tile_high = emulator_ptr->bus_read((ushort)(tile_address + (line_in_tile * 2) + 1));
-
-		int bit_index = 7 - (background_x % 8);
-		int colour_bit = ((tile_high >> bit_index) & 0x01) << 1 | ((tile_low >> bit_index) & 0x1);
-
-		byte bgp = emulator_ptr->bus_read((ushort)(0xff00 | io_BGP));
-		int pallete_shift = colour_bit * 2;
-		int pallete_colour = (bgp >> pallete_shift) & 0x03;
-
-		background_pixel_buffer[ly * SCREEN_WIDTH + x] = gb_colors[pallete_colour];
-	}
+    return tile_address;
 }
 
-void PPU::draw_frame() {
-    //call method in emu which can call application to render a new frame when needed
-    draw_ready = true;
+byte PPU::read_vram(const ushort& address) {
+    if (address >= 0x8000 && address < 0xa000) {
+        if (blocked_vram) {
+            return 0xff;
+        }
+
+        return emulator_ptr->bus_read(address);
+    }
+}
+
+void PPU::bg_fetcher_tick() {
+    fifo_ticks++;
+
+    if (fifo_ticks < 2) {
+        return; //do nothing, only tick every 2 t cycles
+    }
+
+    fifo_ticks = 0;
+      
+    switch (current_bg_fifo_state) {
+    case fifo_FETCH_TILE_NUMBER:
+        fetcher_get_tile_number();
+        current_bg_fifo_state = fifo_FETCH_TILE_LOW;
+        break;
+
+    case fifo_FETCH_TILE_LOW:
+        fetcher_get_tile_low();
+        current_bg_fifo_state = fifo_FETCH_TILE_HIGH;
+        break;
+
+    case fifo_FETCH_TILE_HIGH:
+        fetcher_get_tile_high();
+        current_bg_fifo_state = fifo_PUSHING;
+        break;
+
+    case fifo_PUSHING:
+        fetcher_push_row();
+        current_bg_fifo_state = fifo_FETCH_TILE_NUMBER;
+        break;
+
+    case fifo_NONE:
+        break;
+    }
+}
+
+void PPU::fetcher_get_tile_number() {
+    ushort tile_map_base = 0x9800;
+    if ((lcdc & 0x8) != 0) {
+        tile_map_base = 0x9c00;
+    }
+
+    tile_map_base += ((scx / 8) + bg_fifo_x) & 0x1f;
+    tile_map_base += 32 * (((ly + scy) & 0xFF) / 8);
+
+    current_pixel_id = read_vram((ushort)(tile_map_base));
+}
+
+void PPU::fetcher_get_tile_low() {
+    ushort tile_data_address = get_tile_address_from_id(current_pixel_id);
+    tile_data_address += (2 * ((ly + scy) % 8));
+
+    current_pixel_low = read_vram(tile_data_address);
+}
+
+void PPU::fetcher_get_tile_high() {
+    ushort tile_data_address = get_tile_address_from_id(current_pixel_id);
+    tile_data_address += 2 * ((ly + scy) % 8);
+    current_pixel_high = read_vram(tile_data_address + 1);
+}
+
+void PPU::fetcher_push_row() {
+    if (bg_fifo_queue.size() < 8) {
+        //loop from left to right
+        for (int bit = 7; bit >= 0; bit--) {
+            byte low_bit = (current_pixel_low >> bit) & 0x1;
+            byte high_bit = (current_pixel_high >> bit) & 0x1;
+            byte colour = (high_bit << 0x1) | low_bit;
+
+            fifo_pixel new_pixel = {
+                .colour = colour,
+                .pallete = bgp,
+                .priority = 0x00,
+                .sprite = 0x00,
+                .sprite_pallete = 0x00
+            };
+
+            push_pixel(bg_fifo_queue, new_pixel);
+        }
+        bg_fifo_x++;
+    }
+}
+
+void PPU::push_pixel(std::queue<fifo_pixel>& fifo, const fifo_pixel& pixel) {
+    if (fifo.size() < 16) {
+        fifo.push(pixel);
+    }
+}
+
+const fifo_pixel PPU::pop_pixel(std::queue<fifo_pixel>& fifo) {
+    if (!fifo.empty()) {
+        fifo_pixel pixel = fifo.front();
+        fifo.pop();
+        return pixel;
+    }
+    
+    return {};
+}
+
+void PPU::clear_fifo(std::queue<fifo_pixel>& fifo) {
+    while (!fifo.empty()) {
+        fifo.pop();
+    }
+}
+
+void PPU::output_bg_pixel() {
+    if (!bg_fifo_queue.empty()) {
+        if (!primed_fifo) {
+            if (bg_fifo_queue.size() >= 8) {
+                for (int i = 0; i < (scx & 7); i++) {
+                    bg_fifo_queue.pop();
+                }
+                primed_fifo = true;
+                return;
+            }
+        }
+
+        if (primed_fifo) {
+            fifo_pixel pixel = pop_pixel(bg_fifo_queue);
+
+            int palette_shift = pixel.colour * 2;
+            int palette_colour = (bgp >> palette_shift) & 0x03;
+
+            background_pixel_buffer[ly * SCREEN_WIDTH + onscreen_x] = gb_colors[palette_colour];
+
+            onscreen_x++;
+        }
+    }
 }

@@ -19,7 +19,7 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 		return -255;
 	}
 
-	this->using_boot_rom = false;
+	this->using_boot_rom = using_boot_rom;
 
 	//load rom file into memory and optionally boot rom + parse for rom header
 
@@ -113,10 +113,17 @@ bool Emulator::is_using_boot_rom() {
 void Emulator::close_emulator() {
 	printf("+----------------------------------------+\n");
 
+	PPU_ptr.reset();
 	PPU_ptr = nullptr;
+	MMU_ptr.reset();
 	MMU_ptr = nullptr;
+	TIMER_ptr.reset();
 	TIMER_ptr = nullptr;
+	CPU_ptr.reset();
 	CPU_ptr = nullptr;
+
+	current_emulator_instance.reset();
+	current_emulator_instance = nullptr;
 }
 
 

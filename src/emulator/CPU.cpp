@@ -14,7 +14,9 @@ CPU::CPU(std::shared_ptr<Emulator> emulator_ptr) {
 
 CPU::~CPU() {
 	//set the emu pointer to nullpointer to -1 ref count
+	this->emulator_ptr.reset();
 	this->emulator_ptr = nullptr;
+
 	printf("[SB] Shutting down CPU object\n");
 }
 

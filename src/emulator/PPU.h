@@ -4,8 +4,25 @@
 #include <memory>
 #include <SDL3/SDL.h>
 #include <array>
+#include <queue>
 
 class Emulator;
+
+struct fifo_pixel {
+	byte colour = 0x00;
+	byte pallete = 0x00;
+	byte priority = 0x00;
+	bool sprite = false;
+	byte sprite_pallete = 0x00;
+};
+
+enum fifo_state {
+	fifo_NONE,
+	fifo_PUSHING,
+	fifo_FETCH_TILE_HIGH,
+	fifo_FETCH_TILE_LOW,
+	fifo_FETCH_TILE_NUMBER
+};
 
 class PPU {
 public:
@@ -45,7 +62,6 @@ private:
 	bool vblank_active = false;
 	int internal_cycles = 0;
 
-	int mode3_len = 172;
 	ppu_modes current_mode = ppu_NONE;
 	
 	const int SCREEN_WIDTH = 160;
@@ -54,14 +70,47 @@ private:
 	bool render_line = false;
 	bool render_frame = false;
 
+	bool blocked_vram = false;
+
 	bool draw_ready = false;
 
 	std::array<uint32_t, 160 * 144> background_pixel_buffer = std::array<uint32_t, 160 * 144>();
 	std::array<uint32_t, 4> gb_colors = std::array<uint32_t, 4>();
 
-	//sdl components, textures for rendering -> call emulator methods with textures as params to render
+	std::queue<fifo_pixel> bg_fifo_queue = std::queue<fifo_pixel>();
+	fifo_state current_bg_fifo_state = fifo_FETCH_TILE_NUMBER;
+	
+	int fifo_ticks = 0;
+	int bg_fifo_x = 0;
+	int bg_fifo_y = 0;
+	int onscreen_x = 0;
+	
+	bool start_of_fifo_scanline = false;
+	bool primed_fifo = false;
+
+	byte current_pixel_id = 0x00;
+	ushort current_pixel_address = 0x0000;
+	byte current_pixel_low = 0x00;
+	byte current_pixel_high = 0x00;
 
 private:
 	void draw_background_scanline();
 	void draw_frame();
+
+	ushort get_tile_address_from_id(const byte& tile_id);
+	byte read_vram(const ushort& address);
+
+	void bg_fetcher_tick();
+	void fetcher_get_tile_number();
+	void fetcher_get_tile_low();
+	void fetcher_get_tile_high();
+	void fetcher_push_row();
+
+	//fifo helper methods for either fifo
+	void push_pixel(std::queue<fifo_pixel>& fifo, const fifo_pixel& pixel);
+	const fifo_pixel pop_pixel(std::queue<fifo_pixel>& fifo);
+	void clear_fifo(std::queue<fifo_pixel>& fifo);
+
+	//push pixel to the screen, todo modify to use either fifo
+	void output_bg_pixel();
 };
