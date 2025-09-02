@@ -18,49 +18,50 @@ FetchContent_Declare(
 	SDL3
 	GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
 	GIT_TAG release-3.2.x
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
 )
-FetchContent_MakeAvailable(SDL3)
+
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+
+if(NOT SDL3_FOUND)
+    message(STATUS "getting sdl from github...")
+    FetchContent_MakeAvailable(SDL3)
+else()
+    message(STATUS "using local sdl3")
+endif()
 
 # Fetch ImGui
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
     GIT_TAG docking
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
 )
-FetchContent_GetProperties(imgui)
-if(NOT imgui_POPULATED)
-    FetchContent_Populate(imgui)
+FetchContent_MakeAvailable(imgui)
 
-    # Create ImGui library target
-    add_library(ImGui STATIC
-        ${imgui_SOURCE_DIR}/imgui.cpp
-        ${imgui_SOURCE_DIR}/imgui_demo.cpp
-        ${imgui_SOURCE_DIR}/imgui_draw.cpp
-        ${imgui_SOURCE_DIR}/imgui_tables.cpp
-        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
-    )
+add_library(ImGui
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+	${imgui_SOURCE_DIR}/imgui_tables.cpp
+	${imgui_SOURCE_DIR}/imgui_widgets.cpp
+	${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+)
 
-    target_include_directories(ImGui PUBLIC
-        ${imgui_SOURCE_DIR}
-        ${imgui_SOURCE_DIR}/backends
-    )
+target_include_directories(ImGui PUBLIC  
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
 
-    target_link_libraries(ImGui PUBLIC SDL3::SDL3)
-endif()
+target_link_libraries(ImGui PUBLIC SDL3::SDL3-static)
 
 # Add source to this project's executable.
 add_executable (SharpboyPlusPlus "main.cpp" "src/externals/nlohmann/json.hpp" "src/emulator/Emulator.h" "src/emulator/Emulator.cpp" "src/emulator/CPU.h" "src/emulator/CPU.cpp" "src/emulator/MMU.h" "src/emulator/MMU.cpp" "src/emulator/Instruction_definitions.cpp" "src/emulator/Timers.h" "src/emulator/Timers.cpp" "src/emulator/PPU.h" "src/emulator/PPU.cpp"  "src/emulator/emu_visuals/Graphics.h" "src/emulator/emu_visuals/Graphics.cpp" "src/Application.h" "src/Application.cpp")
 
-target_link_libraries(SharpboyPlusPlus PRIVATE SDL3::SDL3 ImGui)
-
-if(WIN32)
-    add_custom_command(TARGET SharpboyPlusPlus POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:SDL3::SDL3>
-        $<TARGET_FILE_DIR:SharpboyPlusPlus>)
-endif()
+target_link_libraries(SharpboyPlusPlus PRIVATE ImGui SDL3::SDL3-static)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET SharpboyPlusPlus PROPERTY CXX_STANDARD 20)

@@ -24,7 +24,7 @@ public:
 	//instance setup
 	int initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom);
 	void set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr);
-	bool is_using_boot_rom();
+	const bool& is_using_boot_rom() const;
 	void close_emulator();
 
 	//execution
@@ -45,10 +45,14 @@ public:
 
 	//ppu functions
 	ppu_modes get_current_ppu_mode();
-	const std::array<uint32_t, 160 * 144>& get_frame_buffer();
+	std::array<uint32_t, 160 * 144> get_frame_buffer();
 	bool draw_ready();
 	void reset_draw_ready();
 
+	//get debug information
+	cpu_data get_cpu_data();
+	std::array<uint32_t, 64> get_next_tile(const int& index);
+ 
 private:
 	std::shared_ptr<Emulator> current_emulator_instance = nullptr;
 	rom_header header;

@@ -1,14 +1,14 @@
 #include "Application.h"
 
 Application::Application() {
-	init_main_SDL_components(sdl_running, &window, &renderer, &texture);
+	init_main_SDL_components(sdl_running, &window, &renderer, &emu_texture, &debug_tilemap_texture);
 }
 
 Application::~Application() {
 	//close emulator if its still open
 
 	close_imgui();
-	close_SDL(&window, &renderer, &texture);
+	close_SDL(&window, &renderer, &emu_texture, &debug_tilemap_texture);
 
 	window = nullptr;
 	renderer = nullptr;
@@ -37,7 +37,7 @@ void Application::create_new_emu_instance(const std::string& rom_file_name, cons
 	}
 
 	printf("[SB] Created new emulator instance successfully!\n");
-	emu_running = true;
+	emu_initialised = true;
 }
 
 void Application::close_emu_instance() {
@@ -46,15 +46,23 @@ void Application::close_emu_instance() {
 	}
 
 	instance->close_emulator();
+
 	instance.reset();
 	instance = nullptr;
 
 	emu_running = false;
+	emu_initialised = false;
 
 	printf("[SB] Closed emu instance successfully!\n");
 }
 
 //main loop
+void Application::start_new_rom() {
+	if (!emu_running) {
+		emu_running = true;
+	}
+}
+
 void Application::run() {
 	const int GB_CPU_CLOCKSPEED = 4194304;
 	auto last_time = std::chrono::high_resolution_clock::now();
@@ -70,7 +78,7 @@ void Application::run() {
 		//clear background and render ui
 		clear_background(&renderer, 0, 0, 0, 255);
         if (!imgui_hidden) {
-            draw_imgui(self);
+            draw_imgui(self, &debug_tilemap_texture);
         }
 
         if (emu_running) {
@@ -82,7 +90,7 @@ void Application::run() {
 			auto current_time = std::chrono::high_resolution_clock::now();
 			auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - last_time);
 
-			int cycles_to_execute = (elapsed.count() * GB_CPU_CLOCKSPEED) / 1000000000;
+			int cycles_to_execute = static_cast<int>((elapsed.count() * GB_CPU_CLOCKSPEED) / 1000000000);
 
             while (cycles_to_execute > 0) {
 				int cycles = 0;
@@ -91,7 +99,7 @@ void Application::run() {
 
 				//update gb screen when a new frame is ready (on vblank)
 				if (instance->draw_ready()) {
-					update_gb_texture(&texture, &renderer, self);
+					update_gb_texture(&emu_texture, &renderer, self);
 					instance->reset_draw_ready();
 				}
 
@@ -99,7 +107,7 @@ void Application::run() {
             }
 
 			//draw our gb texture every frame to avoid tearing
-			draw_gb_frame(&texture, &renderer);
+			draw_gb_frame(&emu_texture, &renderer);
         }
 		else {
 			started_timing = false;
@@ -120,7 +128,7 @@ void Application::run() {
 	close_emu_instance();
 
 	close_imgui();
-	close_SDL(&window, &renderer, &texture);
+	close_SDL(&window, &renderer, &emu_texture, &debug_tilemap_texture);
 }
 
 void Application::close() {
@@ -132,11 +140,11 @@ void Application::toggle_imgui_shown() {
 	imgui_hidden = !imgui_hidden;
 }
 
-const std::array<uint32_t, 160 * 144>& Application::get_frame_buffer() {
+std::array<uint32_t, 160 * 144> Application::get_frame_buffer() {
 	return instance->get_frame_buffer();
 }
 
-const std::vector<std::string>& Application::get_rom_file_names() {
+std::vector<std::string> Application::get_rom_file_names() {
 	return rom_file_names;
 }
 
@@ -162,4 +170,12 @@ void Application::refresh_rom_file_names() {
 	}
 
 	printf("[SHARPBOY]:: Success loading roms from %s.\n", rom_path);
+}
+
+const cpu_data& Application::get_cpu_data() {
+	return instance->get_cpu_data();
+}
+
+std::array<uint32_t, 64> Application::get_tile_map_data(const int& index) {
+	return instance->get_next_tile(index);
 }

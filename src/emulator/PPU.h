@@ -35,12 +35,15 @@ public:
 
 	byte read_ppu_io(const byte& ppu_io);
 	void io_instant_write(const byte& ppu_io, const byte& value);
-	ppu_modes get_current_mode();
+    ppu_modes get_current_mode();
 
 	bool is_draw_ready();
 	void reset_draw_ready();
 
-	const std::array<uint32_t, 160 * 144>& get_bg_frame_buffer();
+	std::array<uint32_t, 160 * 144> get_bg_frame_buffer();
+
+	//debug methods for showing tilemaps etc 
+	std::array<uint32_t, 64> get_next_tile(const int& index);
 
 private:
 	std::shared_ptr<Emulator> emulator_ptr = nullptr;
@@ -94,9 +97,6 @@ private:
 	byte current_pixel_high = 0x00;
 
 private:
-	void draw_background_scanline();
-	void draw_frame();
-
 	ushort get_tile_address_from_id(const byte& tile_id);
 	byte read_vram(const ushort& address);
 
@@ -108,9 +108,11 @@ private:
 
 	//fifo helper methods for either fifo
 	void push_pixel(std::queue<fifo_pixel>& fifo, const fifo_pixel& pixel);
-	const fifo_pixel pop_pixel(std::queue<fifo_pixel>& fifo);
+	fifo_pixel pop_pixel(std::queue<fifo_pixel>& fifo) ;
 	void clear_fifo(std::queue<fifo_pixel>& fifo);
 
 	//push pixel to the screen, todo modify to use either fifo
 	void output_bg_pixel();
+
+	//debug methods for showing tilemaps etc 
 };

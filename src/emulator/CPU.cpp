@@ -130,6 +130,10 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 	}
 }
 
+const cpu_data& CPU::get_data() {
+	return data;
+}
+
 byte CPU::fetch_opcode() {
 	emulator_ptr->tick_other_components(2);
 	

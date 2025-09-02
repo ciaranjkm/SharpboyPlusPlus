@@ -4,7 +4,7 @@
 PPU::PPU(std::shared_ptr<Emulator> emulator_ptr) {
     gb_colors = std::array<uint32_t, 4>{
             0xffffffff,
-            0xd3d3d3d3,
+            0xd3d3d3ff,
             0x222222ff,
             0x000000ff
     };
@@ -215,11 +215,36 @@ void PPU::reset_draw_ready() {
     draw_ready = false;
 }
 
-const std::array<uint32_t, 160 * 144>& PPU::get_bg_frame_buffer() {
+std::array<uint32_t, 160 * 144> PPU::get_bg_frame_buffer() {
     return background_pixel_buffer;
 }
 
-ushort PPU::get_tile_address_from_id(const byte& tile_id) {
+std::array<uint32_t, 64> PPU::get_next_tile(const int& index) {
+    std::array<uint32_t, 64> tile = std::array<uint32_t, 64>();
+    ushort tile_address = 0x8000 + (index * 16);
+
+    int count = 0;
+    for (int row = 0; row < 16; row += 2) {
+        byte low = emulator_ptr->bus_read(tile_address + row);
+        byte high = emulator_ptr->bus_read(tile_address + row + 1);
+
+        for (int bit = 7; bit >= 0; bit--) {
+            byte low_bit = (low >> bit) & 0x1;
+            byte high_bit = (high >> bit) & 0x1;
+
+            byte colour = (high_bit << 1) | low_bit;
+
+            int palette_shift = colour * 2;
+            int palette_colour = (bgp >> palette_shift) & 0x03;
+
+            tile[count++] = gb_colors[palette_colour];
+        }
+    }
+
+    return tile;
+}
+
+ushort PPU::get_tile_address_from_id(const byte& tile_id)  {
     ushort tile_address = 0x0000;
     ushort tile_data_base_address = 0x9000;
     if ((lcdc & 0x10) != 0) {
@@ -332,7 +357,7 @@ void PPU::push_pixel(std::queue<fifo_pixel>& fifo, const fifo_pixel& pixel) {
     }
 }
 
-const fifo_pixel PPU::pop_pixel(std::queue<fifo_pixel>& fifo) {
+fifo_pixel PPU::pop_pixel(std::queue<fifo_pixel>& fifo) {
     if (!fifo.empty()) {
         fifo_pixel pixel = fifo.front();
         fifo.pop();

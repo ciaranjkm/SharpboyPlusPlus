@@ -106,7 +106,7 @@ void Emulator::set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr) {
 	this->current_emulator_instance = emulator_ptr;
 }
 
-bool Emulator::is_using_boot_rom() {
+const bool& Emulator::is_using_boot_rom() const {
 	return using_boot_rom;
 }
 
@@ -205,7 +205,7 @@ ppu_modes Emulator::get_current_ppu_mode() {
 	return PPU_ptr->get_current_mode();
 }
 
-const std::array<uint32_t, 160 * 144>& Emulator::get_frame_buffer() {
+std::array<uint32_t, 160 * 144> Emulator::get_frame_buffer() {
 	return PPU_ptr->get_bg_frame_buffer();
 }
 
@@ -216,6 +216,15 @@ bool Emulator::draw_ready() {
 void Emulator::reset_draw_ready() {
 	PPU_ptr->reset_draw_ready();
 }
+
+cpu_data Emulator::get_cpu_data() {
+	return CPU_ptr->get_data();
+}
+
+std::array<uint32_t, 64> Emulator::get_next_tile(const int& index) {
+	return PPU_ptr->get_next_tile(index);
+}
+
 
 bool Emulator::load_rom_file(const std::string& file_name, std::vector<byte>& rom) {
 	if (!std::filesystem::exists(file_name)) {

@@ -13,7 +13,7 @@ class Application;
 
 //initialisation
 void initialise_ImGui_components(SDL_Window** window, SDL_Renderer** renderer);
-void init_main_SDL_components(bool& sdl_running, SDL_Window** window, SDL_Renderer** renderer, SDL_Texture** texture);
+void init_main_SDL_components(bool& sdl_running, SDL_Window** window, SDL_Renderer** renderer, SDL_Texture** texture, SDL_Texture** debug_tilemap_texture);
 
 //poll events
 void poll_SDL_events(SDL_Event* event, std::shared_ptr<Application> app);
@@ -25,9 +25,11 @@ void update_gb_texture(SDL_Texture** texture, SDL_Renderer** renderer, std::shar
 void draw_gb_frame(SDL_Texture** texture, SDL_Renderer** renderer);
 
 //imgui
-void draw_imgui(std::shared_ptr<Application> app);
+void draw_ppu_tilemap(std::shared_ptr<Application> app, SDL_Texture** debug_tilemap_texture);
+void draw_cpu_debugger(std::shared_ptr<Application> app);
+void draw_imgui(std::shared_ptr<Application> app, SDL_Texture** debug_tilemap_texture);
 void render_imgui(SDL_Renderer** renderer);
 
 //cleanup
 void close_imgui();
-void close_SDL(SDL_Window** window, SDL_Renderer** renderer, SDL_Texture** texture);
+void close_SDL(SDL_Window** window, SDL_Renderer** renderer, SDL_Texture** texture, SDL_Texture** debug_tile_map_texture);
