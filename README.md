@@ -1,4 +1,4 @@
-# SharpboyPlusPlus 
+# Sharpboy++ 
 ### A Gameboy (DMG) emulator in C++ with SDL and ImGui
 This is my first attempt at a major project in C++, trying to learn as much as possible whilst working on it. It's currently a w.i.p loading boot rom and some games with limited functionality with 32Kb ROM sizes and no gui. Currently passing all of mooneye's test roms for timing, cpu instructions, interrupts and OAM DMA.
 
