@@ -13,6 +13,7 @@ Timers::Timers(std::shared_ptr<Emulator> emulator_ptr) {
 }
 
 Timers::~Timers() {
+	this->emulator_ptr.reset();
 	this->emulator_ptr = nullptr;
 
 	printf("[SB] Shutting down TIMERS object\n");
@@ -26,7 +27,7 @@ void Timers::reset_timers() {
 	tima = 0x00;
 	tma = 0x00;
 
-	if (!using_boot_rom) {
+	if (using_boot_rom) {
 		return;
 	}
 
@@ -100,7 +101,7 @@ byte Timers::read_timer_io(const byte& timer_io) {
 	}
 }
 
-void Timers::write_timer_io(const byte& timer_io, const byte& value) {
+void Timers::io_instant_write(const byte& timer_io, const byte& value) {
 	switch (timer_io) {
 	case io_DIV: 
 		internal_div = 0x0000; 

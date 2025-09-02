@@ -7,6 +7,23 @@ typedef uint8_t byte;
 typedef uint16_t ushort;
 typedef int8_t sbyte;
 
+struct cpu_data {
+	byte a = 0x00;
+	byte f = 0x00;
+	byte b = 0x00;
+	byte c = 0x00;
+	byte d = 0x00;
+	byte e = 0x00;
+	byte h = 0x00;
+	byte l = 0x00;
+
+	ushort pc = 0x0000;
+	ushort sp = 0x0000;
+
+	bool ime = false;
+	bool halted = false;
+};
+
 enum cpu_joined_registers {
 	registers_AF = 0,
 	registers_BC = 1,

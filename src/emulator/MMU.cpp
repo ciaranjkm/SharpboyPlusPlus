@@ -12,7 +12,9 @@ MMU::MMU(std::shared_ptr<Emulator> emulator_ptr) {
 }
 
 MMU::~MMU() {
+	this->emulator_ptr.reset();
 	this->emulator_ptr = nullptr;
+
 	printf("[SB] Shutting down MMU object\n");
 }
 
@@ -254,10 +256,10 @@ void MMU::unblocked_write(const ushort& address, const byte& value) {
 byte MMU::read_io(const byte& io_target) {
 	//should the io be for timer/ppu, redirect the read
 	if (io_target >= io_DIV && io_target <= io_TAC) {
-		return emulator_ptr->read_timer_io(io_target);
+		return emulator_ptr->io_instant_read(io_target);
 	}
 	else if (io_target >= io_LCDC && io_target <= io_WX && io_target != io_DMA) {
-		return emulator_ptr->read_ppu_io(io_target);
+		return emulator_ptr->io_instant_read(io_target);
 	}
 	else {
 		switch (io_target) {
@@ -275,11 +277,11 @@ byte MMU::read_io(const byte& io_target) {
 void MMU::write_io(const byte& io_target, const byte& value) {
 	//should our io be for the timer/ppu, redirect the write
 	if (io_target >= io_DIV && io_target <= io_TAC) {
-		emulator_ptr->write_timer_io(io_target, value);
+		emulator_ptr->io_instant_write(io_target, value);
 		return;
 	}
 	else if (io_target >= io_LCDC && io_target <= io_WX && io_target != io_DMA) {
-		emulator_ptr->write_ppu_io(io_target, value);
+		emulator_ptr->io_instant_write(io_target, value);
 		return;
 	}
 	else {

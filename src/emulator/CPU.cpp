@@ -14,7 +14,9 @@ CPU::CPU(std::shared_ptr<Emulator> emulator_ptr) {
 
 CPU::~CPU() {
 	//set the emu pointer to nullpointer to -1 ref count
+	this->emulator_ptr.reset();
 	this->emulator_ptr = nullptr;
+
 	printf("[SB] Shutting down CPU object\n");
 }
 
@@ -77,7 +79,7 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 	}
 	*/
 	
-	if (false) {
+	if (print_debug_to_console) {
 		byte one = emulator_ptr->bus_read(data.pc);
 		byte two = emulator_ptr->bus_read(data.pc + 1);
 		byte three = emulator_ptr->bus_read(data.pc + 2);
@@ -126,6 +128,10 @@ void CPU::step_cpu(int& cycles, const bool& print_debug_to_console) {
 
 		execute_opcode(cycles, opcode);
 	}
+}
+
+const cpu_data& CPU::get_data() {
+	return data;
 }
 
 byte CPU::fetch_opcode() {
