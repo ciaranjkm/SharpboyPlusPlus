@@ -18,24 +18,32 @@ struct single_step_test_cycle {
 
 class CPU {
 public:
-	CPU(std::shared_ptr<Emulator> emulator_ptr);
+	CPU(std::shared_ptr<Emulator> emulator);
 	~CPU();
 
+	//state control reset/ is init
 	const bool is_cpu_initialised();
 	void reset_cpu(const bool& check_sum_zero);
 
+	//execute one instruction 
 	void step_cpu(int& cycles, const bool& print_debug_to_console);
 
+	//debug for cpu info
 	const cpu_data& get_data();
 
 private:
-	void internal_cycle_other_components();
+	//tick other components
+	void internal_cycle_other_components(const int& ticks);
+	
+	//fetches
 	byte fetch_opcode();
 	byte fetch_next_byte();
 
+	//interrupts
 	const byte is_interrupt_pending();
 	int handle_interupts(int& cycles);
 
+	//opcode execution
 	void execute_opcode(int& cycles, const byte& opcode);
 	void execute_cb_opcode(int& cycles);
 
@@ -43,26 +51,27 @@ private:
 	byte read_from_bus(const ushort& address);
 	void write_to_bus(const ushort& address, const byte& value);
 
+	//flags
 	const bool get_flag_state(const cpu_flags& flag);
 	void set_flag_state(const cpu_flags& flag, const bool& state);
 
 private:
-	std::shared_ptr<Emulator> emulator_ptr;
-	bool initialised = false;
+	std::shared_ptr<Emulator> emulator;
+	bool m_initialised = false;
 
-	cpu_data data;
-	bool enable_ime_next_cycle = false;
-	byte interrupt_pending = 0x00;
+	cpu_data m_cpu_data;
+	bool m_ei_executed = false;
+	byte m_interrupt_pending = 0x00;
 
-	bool halt_bug_next_instruction = false;
+	bool m_halt_bug = false;
+
 private:
-	//opcode functions (include memory vector and cycles for testing)
-
+	//opcodes
 	//8 bit load instructions
 	int LD_R8_R8(byte& register_one, const byte& register_two);
 	int LD_R8_N8(byte& register_one);
 	int LD_R8_HL(byte& register_one, const byte& h, const byte& l);
-	int LD_HL_R8(const byte& h, const byte& l, const byte& );
+	int LD_HL_R8(const byte& h, const byte& l, const byte&);
 	int LD_HL_N8(const byte& h, const byte& l);
 	int LD_A_R16(byte& a, const byte& register_high, const byte& register_low);
 	int LD_R16_A(const byte& register_high, const byte& register_low, const byte& a);
@@ -173,4 +182,5 @@ private:
 	int STOP();
 	int DI();
 	int EI();
+
 };

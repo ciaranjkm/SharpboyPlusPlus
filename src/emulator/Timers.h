@@ -5,9 +5,16 @@
 
 class Emulator;
 
+struct timer_io {
+	ushort internal_div = 0x0000;
+	byte tac = 0x00;
+	byte tima = 0x00;
+	byte tma = 0x00;
+};
+
 class Timers {
 public:
-	Timers(std::shared_ptr<Emulator> emulator_ptr);
+	Timers(std::shared_ptr<Emulator> emulator);
 	~Timers();
 
 	void reset_timers();
@@ -21,13 +28,10 @@ public:
 	void io_instant_write(const byte& timer_io, const byte& value);
 
 private:
-	std::shared_ptr<Emulator> emulator_ptr;
+	std::shared_ptr<Emulator> emulator;
 	bool initialised;
 
-	ushort internal_div = 0x0000;
-	byte tac = 0x00;
-	byte tima = 0x00;
-	byte tma = 0x00;
+	timer_io io = timer_io();
 
 	bool previous_and_result = false;
 	bool reload_tima = false;

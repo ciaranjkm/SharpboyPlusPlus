@@ -196,13 +196,13 @@ int CPU::LD_SP_N16(ushort& sp) {
 int CPU::LD_SP_HL(ushort& sp, const byte& h, const byte& l) {
 	ushort new_sp = (ushort)(h << 8 | l);
 	sp = new_sp;
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
 	return cycles_EIGHT;
 }
 
 int CPU::PUSH_R16(ushort& sp, const byte& register_high, const byte& register_low) {
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 	sp--;
 
 	write_to_bus(sp, register_high);
@@ -255,7 +255,7 @@ int CPU::LD_HL_SP_E8(byte& h, byte& l, const ushort& sp) {
 		adj = 0xff;
 	}
 
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
 	int h_result = (sp >> 8) + adj + get_flag_state(flags_CARRY);
 	h = h_result;
@@ -782,7 +782,7 @@ int CPU::INC_R16(byte& register_high, byte& register_low) {
 	register_high = high_result;
 	register_low = low_result;
 
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
 	return cycles_EIGHT;
 }
@@ -797,7 +797,7 @@ int CPU::DEC_R16(byte& register_high, byte& register_low) {
 	register_high = high_result;
 	register_low = low_result;
 
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
 	return cycles_EIGHT;
 }
@@ -813,7 +813,7 @@ int CPU::ADD_HL_R16(byte& h, byte& l, const byte& register_high, const byte& reg
 
 	l = (byte)((ushort)result & 0xff);
 
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
 	h = (byte)((ushort)result >> 8);
 
@@ -837,8 +837,8 @@ int CPU::ADD_SP_E8(ushort& sp) {
 	set_flag_state(flags_HALFCARRY, new_half_carry);
 	set_flag_state(flags_CARRY, new_carry);
 
-	internal_cycle_other_components();
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
+	internal_cycle_other_components(4);
 
 	sp = (ushort)result;
 	return cycles_TWELVE;
@@ -1241,15 +1241,15 @@ int CPU::JP_N16() {
 
 	ushort jump = (ushort)((n16_high << 8) | n16_low);
 
-	data.pc = jump;
-	internal_cycle_other_components();
+	m_cpu_data.pc = jump;
+	internal_cycle_other_components(4);
 
 	return cycles_SIXTEEN;
 }
 
 int CPU::JP_HL(const byte& h, const byte& l) {
 	ushort hl = (ushort)(h << 8 | l);
-	data.pc = hl;
+	m_cpu_data.pc = hl;
 
 	return cycles_FOUR;
 }
@@ -1261,8 +1261,8 @@ int CPU::JP_CC_N16(const bool& condition) {
 	ushort jump = (ushort)((n16_high << 8) | n16_low);
 	
 	if (condition) {
-		data.pc = jump;
-		internal_cycle_other_components();
+		m_cpu_data.pc = jump;
+		internal_cycle_other_components(4);
 		return cycles_SIXTEEN;
 	}
 
@@ -1271,21 +1271,21 @@ int CPU::JP_CC_N16(const bool& condition) {
 
 int CPU::JR_E8() {
 	sbyte e8 = (sbyte)fetch_next_byte();
-	int result = data.pc + e8;
+	int result = m_cpu_data.pc + e8;
 
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
-	data.pc = (ushort)result;
+	m_cpu_data.pc = (ushort)result;
 	return cycles_TWELVE;
 }
 
 int CPU::JR_CC_E8(const bool& condition) {
 	sbyte e8 = (sbyte)fetch_next_byte();
-	int result = data.pc + e8;
+	int result = m_cpu_data.pc + e8;
 
 	if (condition) {
-		data.pc = (ushort)result;
-		internal_cycle_other_components();
+		m_cpu_data.pc = (ushort)result;
+		internal_cycle_other_components(4);
 		return cycles_TWELVE;
 	}
 
@@ -1298,17 +1298,17 @@ int CPU::CALL_N16(ushort& sp) {
 
 	ushort call = (ushort)((n16_high << 8) | n16_low);
 
-	byte pc_low = data.pc & 0xff;
-	byte pc_high = data.pc >> 8;
+	byte pc_low = m_cpu_data.pc & 0xff;
+	byte pc_high = m_cpu_data.pc >> 8;
 
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
 	sp--;
 	write_to_bus(sp, pc_high);
 	sp--;
 	write_to_bus(sp, pc_low);
 
-	data.pc = call;
+	m_cpu_data.pc = call;
 	return cycles_TWENTYFOUR;
 }
 
@@ -1318,17 +1318,17 @@ int CPU::CALL_CC_N16(ushort& sp, const bool& condition) {
 
 	ushort call = (ushort)((n16_high << 8) | n16_low);
 
-	byte pc_low = data.pc & 0xff;
-	byte pc_high = data.pc >> 8;
+	byte pc_low = m_cpu_data.pc & 0xff;
+	byte pc_high = m_cpu_data.pc >> 8;
 
 	if (condition) {
 		sp--;
-		internal_cycle_other_components();
+		internal_cycle_other_components(4);
 		write_to_bus(sp, pc_high);
 		sp--;
 		write_to_bus(sp, pc_low);
 
-		data.pc = call;
+		m_cpu_data.pc = call;
 		return cycles_TWENTYFOUR;
 	}
 
@@ -1343,14 +1343,14 @@ int CPU::RET(ushort& sp) {
 
 	ushort ret = (ushort)((ret_high << 8) | ret_low);
 
-	data.pc = ret;
-	internal_cycle_other_components();
+	m_cpu_data.pc = ret;
+	internal_cycle_other_components(4);
 
 	return cycles_SIXTEEN;
 }
 
 int CPU::RET_CC(ushort& sp, const bool& condition) {
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
 	if (condition) {
 		byte ret_low = read_from_bus(sp);
@@ -1360,8 +1360,8 @@ int CPU::RET_CC(ushort& sp, const bool& condition) {
 
 		ushort ret = (ushort)((ret_high << 8) | ret_low);
 
-		data.pc = ret;
-		internal_cycle_other_components();
+		m_cpu_data.pc = ret;
+		internal_cycle_other_components(4);
 		return cycles_TWENTY;
 	}
 
@@ -1376,37 +1376,37 @@ int CPU::RETI(ushort& sp) {
 
 	ushort ret = (ushort)((ret_high << 8) | ret_low);
 
-	data.pc = ret;
-	data.ime = true;
-	internal_cycle_other_components();
+	m_cpu_data.pc = ret;
+	m_cpu_data.ime = true;
+	internal_cycle_other_components(4);
 	return cycles_SIXTEEN;
 }
 
 int CPU::RST_N8(ushort& sp, const byte& vector) {
 	sp--;
-	internal_cycle_other_components();
+	internal_cycle_other_components(4);
 
-	byte pc_low = data.pc & 0xff;
-	byte pc_high = data.pc >> 8;
+	byte pc_low = m_cpu_data.pc & 0xff;
+	byte pc_high = m_cpu_data.pc >> 8;
 
 	write_to_bus(sp, pc_high);
 	sp--;
 	write_to_bus(sp, pc_low);
 
-	data.pc = (ushort)(0x0000 | vector);
+	m_cpu_data.pc = (ushort)(0x0000 | vector);
 	return cycles_SIXTEEN;
 }
 
 //misc instructions
 int CPU::HALT() {
-	if (interrupt_pending != 0 && !data.ime) {
-		halt_bug_next_instruction = true;
-		data.halted = false;
+	if (m_interrupt_pending != 0 && !m_cpu_data.ime) {
+		m_halt_bug = true;
+		m_cpu_data.halted = false;
 
 		return cycles_NONE;
 	}
 
-	data.halted = true;
+	m_cpu_data.halted = true;
 
 	return cycles_NONE;
 }
@@ -1418,11 +1418,11 @@ int CPU::STOP() {
 }
 
 int CPU::DI() {
-	data.ime = false;
+	m_cpu_data.ime = false;
 	return cycles_FOUR;
 }
 
 int CPU::EI() {
-	enable_ime_next_cycle = true;
+	m_ei_executed = true;
 	return cycles_FOUR;
 }

@@ -614,6 +614,7 @@ enum cpu_rst_vectors {
 
 enum io_addresses {
 	io_JOYP = 0x00,
+	io_true_JOYP = 0xff,
 	io_SB = 0x01,
 	io_SC = 0x02,
 	io_DIV = 0x04,
@@ -715,4 +716,34 @@ enum ppu_mode_lengths {
 	ppu_BLANK_LENGTH = 4560,
 	ppu_FRAME_TOTAL_LENGTH = 70224,
 	ppu_SCANLINE_TOTAL_LENGTH = 456
+};
+
+enum joypad_buttons {
+	button_up,
+	button_down,
+	button_left,
+	button_right,
+	button_a,
+	button_b,
+	button_start,
+	button_select,
+};
+
+struct joypad_state {
+	bool up = false;
+	bool previously_up = false;
+	bool down = false;
+	bool previously_down = false;
+	bool left = false;
+	bool previously_left = false;
+	bool right = false;
+	bool previously_right = false;
+	bool a = false;
+	bool previously_a = false;
+	bool b = false;
+	bool previously_b = false;
+	bool start = false;
+	bool previously_start = false;
+	bool select = false;
+	bool previously_select = false;
 };

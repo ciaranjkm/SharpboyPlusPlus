@@ -15,7 +15,7 @@
 
 #include "emu_visuals/Graphics.h"
 
-class Emulator {
+class Emulator : public std::enable_shared_from_this<Emulator> {
 public:
 	//constructors
 	Emulator();
@@ -23,8 +23,7 @@ public:
 
 	//instance setup
 	int initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom);
-	void set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr);
-	const bool& is_using_boot_rom() const;
+	bool is_using_boot_rom();
 	void close_emulator();
 
 	//execution
@@ -33,19 +32,20 @@ public:
 	//ticks for other components
 	void tick_other_components(const int& cycles);
 
-	//interrupts
+	//interrupts + input (todo optional input with optional sdl)
 	void trigger_interrupt(const interrupt_types& interrupt);
 	void clear_interrupt(const int& interrupt);
+	void trigger_keypress(const joypad_buttons& button, const bool& key_down);
+	byte read_joypad_state();
 
-	//memory/io read write
+	//bus functions
 	byte bus_read(const ushort& address);
 	void bus_write(const ushort& address, const byte& value);
 	byte io_instant_read(const byte& io_target);
 	void io_instant_write(const byte& io_target, const byte& value);
 
 	//ppu functions
-	ppu_modes get_current_ppu_mode();
-	std::array<uint32_t, 160 * 144> get_frame_buffer();
+	const std::array<uint32_t, 160 * 144>& get_frame_buffer();
 	bool draw_ready();
 	void reset_draw_ready();
 
@@ -54,21 +54,23 @@ public:
 	std::array<uint32_t, 64> get_next_tile(const int& index);
  
 private:
-	std::shared_ptr<Emulator> current_emulator_instance = nullptr;
-	rom_header header;
+	rom_header m_header = rom_header();
 
-	std::unique_ptr<CPU> CPU_ptr = nullptr;
-	std::unique_ptr<MMU> MMU_ptr = nullptr;
-	std::unique_ptr<Timers> TIMER_ptr = nullptr;
-	std::unique_ptr<PPU> PPU_ptr = nullptr;
+	std::unique_ptr<CPU> m_cpu = nullptr;
+	std::unique_ptr<MMU> m_mmu = nullptr;
+	std::unique_ptr<Timers> m_timers = nullptr;
+	std::unique_ptr<PPU> m_ppu = nullptr;
 	//apu
 
 	//control bools
-	bool initialised = false;
-	bool single_step_test_mode = false;
-	bool using_boot_rom = false;
+	bool m_initialised = false;
+	bool m_using_boot_rom = false;
+
+	//joypad state
+	joypad_state m_joypad = joypad_state();
 
 private:
+	//todo move this into application class or file manager class maybe?
 	bool load_rom_file(const std::string& file_name, std::vector<byte>& rom_file);
 	void parse_rom_file_header(rom_header& header, const std::vector<byte>& rom);
 

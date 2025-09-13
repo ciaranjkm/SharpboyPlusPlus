@@ -53,7 +53,7 @@ void init_main_SDL_components(bool& sdl_running, SDL_Window** window, SDL_Render
 		return;
 	}
 
-	*debug_tilemap_texture = SDL_CreateTexture(*renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 128, 192);
+	*debug_tilemap_texture = SDL_CreateTexture(*renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 128, 192);
 	if (*debug_tilemap_texture == nullptr) {
 		close_SDL(window, renderer, texture, debug_tilemap_texture);
 
@@ -87,6 +87,76 @@ void poll_SDL_events(SDL_Event* event, std::shared_ptr<Application> app) {
 				app->toggle_imgui_shown();
 				break;
 
+			case SDLK_W:
+				app->handle_keypress(button_up, true);
+				break;
+
+			case SDLK_A: 
+				app->handle_keypress(button_left, true);
+				break;
+
+			case SDLK_S:
+				app->handle_keypress(button_down, true);
+				break;
+
+			case SDLK_D:
+				app->handle_keypress(button_right, true);
+				break;
+
+			case SDLK_O:
+				app->handle_keypress(button_start, true);
+				break;
+
+			case SDLK_P:
+				app->handle_keypress(button_select, true);
+				break;
+
+			case SDLK_K:
+				app->handle_keypress(button_a, true);
+				break;
+
+			case SDLK_L:
+				app->handle_keypress(button_b, true);
+				break;
+
+			default: break;
+			}
+			break;
+
+		case SDL_EVENT_KEY_UP:
+			switch (event->key.key) {
+			case SDLK_W:
+				app->handle_keypress(button_up, false);
+				break;
+
+			case SDLK_A:
+				app->handle_keypress(button_left, false);
+				break;
+
+			case SDLK_S:
+				app->handle_keypress(button_down, false);
+				break;
+
+			case SDLK_D:
+				app->handle_keypress(button_right, false);
+				break;
+
+			case SDLK_O:
+				app->handle_keypress(button_start, false);
+				break;
+
+			case SDLK_P:
+				app->handle_keypress(button_select, false);
+				break;
+
+			case SDLK_K:
+				app->handle_keypress(button_a, false);
+				break;
+
+			case SDLK_L:
+				app->handle_keypress(button_b, false);
+				break;
+
 			default: break;
 			}
 			break;
@@ -114,7 +184,6 @@ void update_gb_texture(SDL_Texture** texture, SDL_Renderer** renderer, std::shar
 
 	const std::array<uint32_t, 160 * 144>& buffer = app->get_frame_buffer();
 	SDL_UpdateTexture(*texture, NULL, buffer.data(), 160 * sizeof(uint32_t));
-
 }
 
 void draw_gb_frame(SDL_Texture** texture, SDL_Renderer** renderer) {
@@ -128,7 +197,7 @@ void draw_load_rom_gui(std::shared_ptr<Application> app) {
 
 	if (ImGui::Button("Load ROM")) {
 		if (app->selected_rom_index != 0) {
-			app->create_new_emu_instance(app->get_rom_file_names()[app->selected_rom_index], app->use_boot_rom_next_instance);
+ 			app->create_new_emu_instance(app->get_rom_file_names()[app->selected_rom_index], app->use_boot_rom_next_instance);
 		}
 	}
 	ImGui::SameLine();

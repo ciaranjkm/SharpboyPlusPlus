@@ -6,6 +6,8 @@ Application::Application() {
 
 Application::~Application() {
 	//close emulator if its still open
+	close_emu_instance();
+
 
 	close_imgui();
 	close_SDL(&window, &renderer, &emu_texture, &debug_tilemap_texture);
@@ -16,7 +18,7 @@ Application::~Application() {
 
 //init
 void Application::set_application_pointer(std::shared_ptr<Application> app) {
-	self = app;
+	self = std::shared_ptr<Application>(app);
 }
 
 bool Application::is_app_running() {
@@ -31,7 +33,6 @@ void Application::create_new_emu_instance(const std::string& rom_file_name, cons
 	}
 
 	instance = std::make_shared<Emulator>();
-	instance->set_emu_pointer(instance);
 	if (instance->initialise_emu_instance(rom_file_name, using_boot_rom) < 0) {
 		return;
 	}
@@ -99,7 +100,7 @@ void Application::run() {
 
 				//update gb screen when a new frame is ready (on vblank)
 				if (instance->draw_ready()) {
-					update_gb_texture(&emu_texture, &renderer, self);
+ 					update_gb_texture(&emu_texture, &renderer, self);
 					instance->reset_draw_ready();
 				}
 
@@ -140,7 +141,7 @@ void Application::toggle_imgui_shown() {
 	imgui_hidden = !imgui_hidden;
 }
 
-std::array<uint32_t, 160 * 144> Application::get_frame_buffer() {
+const std::array<uint32_t, 160 * 144>& Application::get_frame_buffer() {
 	return instance->get_frame_buffer();
 }
 
@@ -178,4 +179,10 @@ const cpu_data& Application::get_cpu_data() {
 
 std::array<uint32_t, 64> Application::get_tile_map_data(const int& index) {
 	return instance->get_next_tile(index);
+}
+
+void Application::handle_keypress(const joypad_buttons& button, const bool& key_down) {
+	if (instance != nullptr) {
+		instance->trigger_keypress(button, key_down);
+	}
 }

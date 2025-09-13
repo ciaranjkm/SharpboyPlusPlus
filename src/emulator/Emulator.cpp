@@ -1,10 +1,8 @@
 #include "Emulator.h"
 
 Emulator::Emulator() {
-	this->using_boot_rom = false;
-	this->single_step_test_mode = false;
-
-	this->initialised = true;
+	this->m_using_boot_rom = false;
+	this->m_initialised = true;
 }
 
 Emulator::~Emulator() {
@@ -13,13 +11,10 @@ Emulator::~Emulator() {
 	close_emulator();
 }
 
-int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom) {
-	if (this->single_step_test_mode) {
-		//done with for now will reimpliment later on 
-		return -255;
-	}
+//instance setup
 
-	this->using_boot_rom = using_boot_rom;
+int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bool& using_boot_rom) {
+	this->m_using_boot_rom = using_boot_rom;
 
 	//load rom file into memory and optionally boot rom + parse for rom header
 
@@ -29,70 +24,66 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 		return -1;
 	}
 
-	header = rom_header();
-	parse_rom_file_header(header, *rom_file_ptr);
+	m_header = rom_header();
+	parse_rom_file_header(m_header, *rom_file_ptr);
 
 	//load boot rom into memory
 	std::unique_ptr<std::array<byte, 0x100>> boot_rom_ptr = std::make_unique<std::array<byte, 0x100>>();
-	if (this->using_boot_rom) {
+	if (this->m_using_boot_rom) {
 		if (!load_boot_rom_file("boot/boot.bin", *boot_rom_ptr)) {
 			printf("[SB] Failed to load BOOT ROM file from boot/boot.bin\n");
 		}
 	}
 
 	//init cpu and reset it
-	current_emulator_instance->CPU_ptr = std::make_unique<CPU>(this->current_emulator_instance);
-	if (!CPU_ptr->is_cpu_initialised()) {
-		CPU_ptr = nullptr;
+	m_cpu = std::make_unique<CPU>(shared_from_this());
+	if (!m_cpu->is_cpu_initialised()) {
 		printf("[SB] CPU init failed, stopping.\n");
 		return -2;
 	}
-	CPU_ptr->reset_cpu(header.checksum_byte == 0);
+	m_cpu->reset_cpu(m_header.checksum_byte == 0);
 
 	//init mmu and reset it
-	current_emulator_instance->MMU_ptr = std::make_unique<MMU>(this->current_emulator_instance);
-	if (!MMU_ptr->is_mmu_initialised()) {
-		CPU_ptr = nullptr;
-		MMU_ptr = nullptr;
-
+	m_mmu = std::make_unique<MMU>(shared_from_this());
+	if (!m_mmu->is_mmu_initialised()) {
 		printf("[SB] MMU init failed, stopping.\n");
 		return -3;
 	}
-	MMU_ptr->reset_mmu(header, *rom_file_ptr, *boot_rom_ptr);
+	m_mmu->reset_mmu(m_header, *rom_file_ptr, *boot_rom_ptr);
 
 	//init timers and reset it 
-	current_emulator_instance->TIMER_ptr = std::make_unique<Timers>(this->current_emulator_instance);
-	if (!TIMER_ptr->is_timers_initialised()) {
-		CPU_ptr = nullptr;
-		MMU_ptr = nullptr;
-		TIMER_ptr = nullptr;
+	m_timers = std::make_unique<Timers>(shared_from_this());
+	if (!m_timers->is_timers_initialised()) {
+		m_cpu = nullptr;
+		m_mmu = nullptr;
+		m_timers = nullptr;
 
 		printf("[SB] TIMER init failed, stopping.\n");
 		return -4;
 	}
-	TIMER_ptr->reset_timers();
+	m_timers->reset_timers();
 
 	//init ppu and reset it
-	current_emulator_instance->PPU_ptr = std::make_unique<PPU>(this->current_emulator_instance);
-	if (!PPU_ptr->is_ppu_initialised()) {
-		CPU_ptr = nullptr;
-		MMU_ptr = nullptr;
-		TIMER_ptr = nullptr;
-		PPU_ptr = nullptr;
+	m_ppu = std::make_unique<PPU>(shared_from_this());
+	if (!m_ppu->is_ppu_initialised()) {
+		m_cpu = nullptr;
+		m_mmu = nullptr;
+		m_timers = nullptr;
+		m_ppu = nullptr;
 
 		printf("[SB] PPU init failed, stopping.\n");
 		return -5;
 	}
-	PPU_ptr->reset_ppu();
+	m_ppu->reset_ppu();
 
 	if (using_boot_rom) {
 		tick_other_components(4);
 	}
 
-	initialised = true;
+	m_initialised = true;
 	printf("+----------------------------------------+\n");
 	printf("[SB] Success initialing emulator with %s\n", rom_file_name.c_str());
-	if (this->using_boot_rom) {
+	if (this->m_using_boot_rom) {
 		printf("[SB] Starting emulator now with boot rom!\n");
 	}
 	else {
@@ -102,48 +93,46 @@ int Emulator::initialise_emu_instance(const std::string& rom_file_name, const bo
 	return 0;
 }
 
-void Emulator::set_emu_pointer(std::shared_ptr<Emulator> emulator_ptr) {
-	this->current_emulator_instance = emulator_ptr;
-}
-
-const bool& Emulator::is_using_boot_rom() const {
-	return using_boot_rom;
+bool Emulator::is_using_boot_rom() {
+	return m_using_boot_rom;
 }
 
 void Emulator::close_emulator() {
 	printf("+----------------------------------------+\n");
 
-	PPU_ptr.reset();
-	PPU_ptr = nullptr;
-	MMU_ptr.reset();
-	MMU_ptr = nullptr;
-	TIMER_ptr.reset();
-	TIMER_ptr = nullptr;
-	CPU_ptr.reset();
-	CPU_ptr = nullptr;
+	m_ppu.reset();
+	m_ppu = nullptr;
 
-	current_emulator_instance.reset();
-	current_emulator_instance = nullptr;
+	m_mmu.reset();
+	m_mmu = nullptr;
+
+	m_timers.reset();
+	m_timers = nullptr;
+
+	m_cpu.reset();
+	m_cpu = nullptr;
 }
 
-
+//execution 
 
 int Emulator::run_next_instruction() {
 	int cycles_completed = 0;
-	CPU_ptr->step_cpu(cycles_completed, false);
+	m_cpu->step_cpu(cycles_completed, false);
 	return cycles_completed;
 }
 
-
+//ticks for other components
 
 void Emulator::tick_other_components(const int& cycles) {
 	for (int i = 0; i < cycles; i++) {
-		TIMER_ptr->timers_tick();
-		PPU_ptr->ppu_tick();
-		MMU_ptr->dma_tick();
+		m_timers->timers_tick();
+		m_ppu->ppu_tick();
+		m_ppu->dma_tick();
 		//apu.tick
 	}
 }
+
+//interrupts + input
 
 void Emulator::trigger_interrupt(const interrupt_types& interrupt) {
 	if (interrupt >= int_VBLANK && interrupt <= int_JOYPAD) {
@@ -161,71 +150,173 @@ void Emulator::clear_interrupt(const int& interrupt) {
 	}
 }
 
+void Emulator::trigger_keypress(const joypad_buttons& button, const bool& key_down) {
+	bool pressed_before = false;
 
+	switch (button) {
+	case button_up:
+		pressed_before = m_joypad.up;
+		m_joypad.up = key_down;
+		break;
+
+	case button_down:
+		pressed_before = m_joypad.down;
+		m_joypad.down = key_down;
+		break;
+
+	case button_left:
+		pressed_before = m_joypad.left;
+		m_joypad.left = key_down;
+		break;
+
+	case button_right:
+		pressed_before = m_joypad.right;
+		m_joypad.right = key_down;
+		break;
+
+	case button_start:
+		pressed_before = m_joypad.start;
+		m_joypad.start = key_down;
+		break;
+
+	case button_select:
+		pressed_before = m_joypad.select;
+		m_joypad.select = key_down;
+		break;
+
+	case button_a:
+		pressed_before = m_joypad.a;
+		m_joypad.a = key_down;
+		break;
+
+	case button_b:
+		pressed_before = m_joypad.b;
+		m_joypad.b = key_down;
+		break;
+	}
+	/*
+	if (!pressed_before && key_down) {
+		byte joyp = io_instant_read(io_true_JOYP);
+		bool is_selected_group = false;
+
+		if (button >= button_start && button <= button_a) { // Action buttons
+			is_selected_group = !(joyp & 0x20);
+		}
+		else { 
+			is_selected_group = !(joyp & 0x10);
+		}
+
+		if (is_selected_group) {
+			trigger_interrupt(int_JOYPAD);
+		}
+	}
+	*/
+}
+
+byte Emulator::read_joypad_state() {
+	byte joyp = io_instant_read(io_true_JOYP);
+
+	byte result = joyp & 0xF0;
+	byte keys = 0x0F; // all released (active high)
+
+	if (!(joyp & 0x20)) {
+		if (m_joypad.start)  keys &= ~(1 << 3);
+		if (m_joypad.select) keys &= ~(1 << 2);
+		if (m_joypad.b)      keys &= ~(1 << 1);
+		if (m_joypad.a)      keys &= ~(1 << 0);
+	}
+
+	if (!(joyp & 0x10)) {
+		if (m_joypad.down)  keys &= ~(1 << 3);
+		if (m_joypad.up)    keys &= ~(1 << 2);
+		if (m_joypad.left)  keys &= ~(1 << 1);
+		if (m_joypad.right) keys &= ~(1 << 0);
+	}
+
+	result |= keys;
+
+	return result;
+}
+
+//bus functions
 
 byte Emulator::bus_read(const ushort& address) {
-	byte value = MMU_ptr->read_from_memory(address);
-	return value;
+	if ((address >= 0x8000 && address <= 0xa000) || (address >= 0xfe00 && address < 0xfea0)) {
+		return m_ppu->read_ppu_memory(address);
+	}
+	else if (address >= 0xff00 && address < 0xff80) {
+		return io_instant_read((byte)(address & 0x00ff));
+	}
+	else {
+		return m_mmu->read_from_memory(address);
+	}
 }
 
 void Emulator::bus_write(const ushort& address, const byte& value) {
-	MMU_ptr->write_to_memory(address, value);
+	if ((address >= 0x8000 && address <= 0xa000) || (address >= 0xfe00 && address < 0xfea0)) {
+		m_ppu->write_ppu_memory(address, value);
+	}
+	else if (address >= 0xff00 && address < 0xff80) {
+		return io_instant_write((byte)(address & 0x00ff), value);
+	}
+	else {
+		m_mmu->write_to_memory(address, value);
+	}
 }
 
 byte Emulator::io_instant_read(const byte& io_target) {
 	if (io_target >= io_DIV && io_target <= io_TAC) {
-		return TIMER_ptr->read_timer_io(io_target);
+		return m_timers->read_timer_io(io_target);
 	}
-	else if (io_target >= io_LCDC && io_target <= io_WX && io_target != io_DMA) {
-		return PPU_ptr->read_ppu_io(io_target);
+	else if (io_target >= io_LCDC && io_target <= io_WX) {
+		return m_ppu->read_ppu_io(io_target);
 	}
 	else {
-		return MMU_ptr->read_io(io_target);
+		return m_mmu->read_io(io_target);
 	}
 }
 
 void Emulator::io_instant_write(const byte& io_target, const byte& value) {
 	if (io_target >= io_DIV && io_target <= io_TAC) {
-		TIMER_ptr->io_instant_write(io_target, value);
+		m_timers->io_instant_write(io_target, value);
 		return;
 	}
-	else if (io_target >= io_LCDC && io_target <= io_WX && io_target != io_DMA) {
-		PPU_ptr->io_instant_write(io_target, value);
+	else if (io_target >= io_LCDC && io_target <= io_WX) {
+		m_ppu->write_ppu_io(io_target, value);
 		return;
 	}
 	else {
-		MMU_ptr->write_io(io_target, value);
+		m_mmu->write_io(io_target, value);
 		return;
 	}
 }
 
+//ppu functions
 
-
-ppu_modes Emulator::get_current_ppu_mode() {
-	return PPU_ptr->get_current_mode();
-}
-
-std::array<uint32_t, 160 * 144> Emulator::get_frame_buffer() {
-	return PPU_ptr->get_bg_frame_buffer();
+const std::array<uint32_t, 160 * 144>& Emulator::get_frame_buffer() {
+	return m_ppu->get_bg_frame_buffer();
 }
 
 bool Emulator::draw_ready() {
-	return PPU_ptr->is_draw_ready();
+	return m_ppu->is_draw_ready();
 }
 
 void Emulator::reset_draw_ready() {
-	PPU_ptr->reset_draw_ready();
+	m_ppu->reset_draw_ready();
 }
 
+//debug
+
 cpu_data Emulator::get_cpu_data() {
-	return CPU_ptr->get_data();
+	return m_cpu->get_data();
 }
 
 std::array<uint32_t, 64> Emulator::get_next_tile(const int& index) {
-	return PPU_ptr->get_next_tile(index);
+	return m_ppu->get_next_tile(index);
 }
 
-
+//rom file loading (todo move this to application class and load the roms into MMU
+//					then when they go out of scope of init they will be destroyed)
 bool Emulator::load_rom_file(const std::string& file_name, std::vector<byte>& rom) {
 	if (!std::filesystem::exists(file_name)) {
 		printf("[SB] Path to rom doesn't exist.\n");

@@ -15,6 +15,10 @@ int main(int argc, char* argv[]) {
 +----------------------------------------------------------------------------------------------+
 )ART";
 
+	//todo remove app class from heap to stack.
+	//todo remove unneccessary pointers and keep pointers where needed, like for emulator itself, then store object within that class locally not as ptrs
+	//todo move app from having a ptr to itself and then pass ref to it to emu instance to call renders and draw functions etc
+
 	std::cout << art << std::endl;
 	
 	std::shared_ptr<Application> app = std::make_shared<Application>();
