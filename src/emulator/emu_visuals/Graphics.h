@@ -6,7 +6,7 @@
 
 #include <SDL3/SDL.h>
 
-#include "../_definitions.h"
+#include "../defs.h"
 #include <memory>
 
 class Application;

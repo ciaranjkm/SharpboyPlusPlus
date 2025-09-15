@@ -26,10 +26,10 @@ set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 
 if(NOT SDL3_FOUND)
-    message(STATUS "getting sdl from github...")
+    message(STATUS "Downloading SDL3 from github, it was not found on your machine...")
     FetchContent_MakeAvailable(SDL3)
 else()
-    message(STATUS "using local sdl3")
+    message(STATUS "Using local SDL3 found on your machine...")
 endif()
 
 # Fetch ImGui
@@ -59,7 +59,7 @@ target_include_directories(ImGui PUBLIC
 target_link_libraries(ImGui PUBLIC SDL3::SDL3-static)
 
 # Add source to this project's executable.
-add_executable (SharpboyPlusPlus "main.cpp" "src/externals/nlohmann/json.hpp" "src/emulator/Emulator.h" "src/emulator/Emulator.cpp" "src/emulator/CPU.h" "src/emulator/CPU.cpp" "src/emulator/MMU.h" "src/emulator/MMU.cpp" "src/emulator/Instruction_definitions.cpp" "src/emulator/Timers.h" "src/emulator/Timers.cpp" "src/emulator/PPU.h" "src/emulator/PPU.cpp"  "src/emulator/emu_visuals/Graphics.h" "src/emulator/emu_visuals/Graphics.cpp" "src/Application.h" "src/Application.cpp")
+add_executable (SharpboyPlusPlus "main.cpp" "src/emulator/Emulator.h" "src/emulator/Emulator.cpp" "src/emulator/CPU.h" "src/emulator/CPU.cpp" "src/emulator/MMU.h" "src/emulator/MMU.cpp" "src/emulator/Instruction_definitions.cpp" "src/emulator/Timers.h" "src/emulator/Timers.cpp" "src/emulator/PPU.h" "src/emulator/PPU.cpp"  "src/emulator/emu_visuals/Graphics.h" "src/emulator/emu_visuals/Graphics.cpp" "src/Application.h" "src/Application.cpp")
 
 target_link_libraries(SharpboyPlusPlus PRIVATE ImGui SDL3::SDL3-static)
 

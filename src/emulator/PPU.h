@@ -1,10 +1,11 @@
 #pragma once
 
-#include "_definitions.h"
+#include "defs.h"
 #include <memory>
 #include <SDL3/SDL.h>
 #include <array>
 #include <queue>
+#include <vector>
 
 class Emulator;
 
@@ -16,17 +17,58 @@ enum fifo_states {
 	fifo_FETCH_TILE_NUMBER
 };
 
+enum ppu_modes {
+	ppu_NONE = 5,
+	ppu_OAM_SEARCH = 2,
+	ppu_DRAW_MODE = 3,
+	ppu_HBLANK = 0,
+	ppu_VBLANK = 1
+};
+
 struct fifo_pixel {
 	byte colour = 0x00;
 	byte pallete = 0x00;
-	byte priority = 0x00;
 	bool sprite = false;
-	byte sprite_pallete = 0x00;
+	bool background_priority = false;
+	int screen_x = 0;
 };
 
-struct fifo_context {
+struct fifo_sprite {
+	byte y_pos = 0x00;
+	byte x_pos = 0x00;
+	byte tile_index = 0x00;
+	byte flags = 0x00;
+	
+	bool background_priority() const { return (flags & 0x80) != 0; }
+	bool y_flip() const { return (flags & 0x40) != 0; }
+	bool x_flip() const { return (flags & 0x20) != 0; }
+	bool use_pallet_one() const { return (flags & 0x10) != 0; }
+};
+
+struct sprite_dma_search_context {
+	int ticks = 0;
+	int index = 0;
+
+};
+
+struct sprite_fifo_context {
+	bool fetching = false;
+	fifo_states current_state = fifo_NONE;
+
+	int ticks = 0;
+
+	bool sprite_found = false;
+	fifo_sprite current_sprite = fifo_sprite();
+
+	byte current_sprite_low = 0x00;
+	byte current_sprite_high = 0x00;
+	ushort current_sprite_pixel_address;
+};
+
+struct background_fifo_context {
 	fifo_states current_state = fifo_FETCH_TILE_NUMBER;
 	int fifo_ticks = 0;
+	bool paused = false;
 
 	int current_x = 0;
 	int on_screen_x = 0;
@@ -41,8 +83,6 @@ struct fifo_context {
 	byte current_pixel_low = 0x00;
 	byte current_pixel_high = 0x00;
 	ushort current_pixel_address = 0x0000;
-
-	fifo_pixel pixel_to_push = fifo_pixel();
 };
 
 struct ppu_io {
@@ -88,6 +128,9 @@ const std::array<uint32_t, 4> m_pallete_colours = std::array<uint32_t, 4>{
 
 const int DEFAULT_DMA_DELAY = 8;
 const int DMA_TOTAL_TICKS = 160;
+
+const int SPRITE_BUFFER_SIZE = 10;
+const int SPRITE_SEARCH_TICKS = 8;
 
 class PPU {
 public:
@@ -140,11 +183,16 @@ private:
 	bool m_draw_ready = false;
 
 	//fifo variables and structs
-	fifo_context m_background_fifo = fifo_context();
+	background_fifo_context m_background_fifo = background_fifo_context();
 	std::queue<fifo_pixel> m_bg_fifo_queue = std::queue<fifo_pixel>();
 	bool start_of_scanline = false;
 	bool primed_fifo = false;
 
+	sprite_fifo_context m_sprite_fifo = sprite_fifo_context();
+	std::queue<fifo_pixel> m_sprite_fifo_queue = std::queue<fifo_pixel>();
+	sprite_dma_search_context m_sprite_search = sprite_dma_search_context();
+	std::vector<fifo_sprite> m_sprite_buffer = std::vector<fifo_sprite>();
+	 
 	//frame buffers
 	std::array<uint32_t, SCREEN_WIDTH* SCREEN_HEIGHT> m_bg_frame_buffer = std::array<uint32_t, SCREEN_WIDTH* SCREEN_HEIGHT>();
 
@@ -169,7 +217,12 @@ private:
 	void fetcher_push_row();
 
 	//sprite fifo methods 
-	//void tick_sprite_fetcher();
+	void sprite_dma_search_tick();	
+	void check_for_sprite_fetch();
+	void tick_sprite_fetcher();
+	void sprite_get_tile_low();
+	void sprite_get_tile_high();
+	void sprite_push_row();
 
 	//fifo helper methods for either fifo
 	void push_pixel(std::queue<fifo_pixel>& fifo, const fifo_pixel& pixel);
@@ -177,8 +230,10 @@ private:
 	void clear_fifo(std::queue<fifo_pixel>& fifo);
 
 	ushort get_tile_address_from_id(const byte& tile_id);
-	void reset_fifo_state(fifo_context& fifo, std::queue<fifo_pixel>& fifo_queue);
+	void reset_bg_fifo(background_fifo_context& fifo, std::queue<fifo_pixel>& fifo_queue);
+
+	void reset_sprite_search();
 
 	//todo modify to use both fifos and mix pixels here
-	void output_bg_pixel();
+	void mix_pixels();
 };

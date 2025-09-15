@@ -1,6 +1,6 @@
 #pragma once
 
-#include "_definitions.h"
+#include "defs.h"
 #include <memory>
 #include <array>
 #include <vector>
@@ -16,6 +16,35 @@ const int BASE_CARTRIDGE_SIZE = 0x8000;
 const int BASE_EXTERNAL_RAM_SIZE = 0x2000;
 const int WRAM_SIZE = 0x2000;
 const int HRAM_SIZE = 0x7f;
+
+enum io_addresses {
+	io_JOYP = 0x00,
+	io_true_JOYP = 0xff,
+	io_SB = 0x01,
+	io_SC = 0x02,
+	io_DIV = 0x04,
+	io_TIMA = 0x05,
+	io_TMA = 0x06,
+	io_TAC = 0x07,
+	io_IF = 0x0f,
+
+	//sound here
+
+	io_LCDC = 0x40,
+	io_STAT = 0x41,
+	io_SCY = 0x42,
+	io_SCX = 0x43,
+	io_LY = 0x44,
+	io_LYC = 0x45,
+	io_DMA = 0x46,
+	io_BGP = 0x47,
+	io_OBP0 = 0x48,
+	io_OBP1 = 0x49,
+	io_WY = 0x4a,
+	io_WX = 0x4b,
+
+	io_BANK = 0x50,
+};
 
 struct io_map {
 	//input

@@ -1,19 +1,28 @@
 #pragma once
-#include "../externals/nlohmann/json.hpp"
-#include <fstream>
-#include <array>
 
-#include "_definitions.h"
+#include "defs.h"
+#include "defs_CPU.h"
 #include <memory>
-#include <string>
 #include <vector>
+#include <array>
 
 class Emulator;
 
-struct single_step_test_cycle {
-	ushort address = 0x0000;
-	byte value = 0x00;
-	std::string operation = std::string("");
+struct cpu_data {
+	byte a = 0x00;
+	byte f = 0x00;
+	byte b = 0x00;
+	byte c = 0x00;
+	byte d = 0x00;
+	byte e = 0x00;
+	byte h = 0x00;
+	byte l = 0x00;
+
+	ushort pc = 0x0000;
+	ushort sp = 0x0000;
+
+	bool ime = false;
+	bool halted = false;
 };
 
 class CPU {

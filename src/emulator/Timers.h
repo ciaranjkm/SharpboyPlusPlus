@@ -1,6 +1,6 @@
 #pragma once
 
-#include "_definitions.h"
+#include "defs.h"
 #include <memory>
 
 class Emulator;

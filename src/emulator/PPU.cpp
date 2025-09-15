@@ -1,4 +1,4 @@
-#include "PPU.h"
+﻿#include "PPU.h"
 #include "Emulator.h"
 
 PPU::PPU(std::shared_ptr<Emulator> emulator) {
@@ -53,7 +53,6 @@ bool PPU::is_ppu_initialised() {
 void PPU::ppu_tick() {
     m_internal_ticks++;
     
-    // 1. Handle LCD enable/disable
     bool lcd_enabled = (m_ppu_io.lcdc & 0x80) != 0;
     if (!lcd_enabled) {
         handle_lcd_off();
@@ -63,31 +62,37 @@ void PPU::ppu_tick() {
         handle_lcd_on();
     }
     
-    // 2. Handle mode/line timing
     switch (m_current_mode) {
     case ppu_OAM_SEARCH:
+        sprite_dma_search_tick();
+
         if (m_internal_ticks == 80) {
             change_mode(ppu_DRAW_MODE);
 
-            reset_fifo_state(m_background_fifo, m_bg_fifo_queue);
-            //printf("oam search done at %d\n", m_internal_ticks);
+            reset_bg_fifo(m_background_fifo, m_bg_fifo_queue);
         }
         break;
 
     case ppu_DRAW_MODE:
         should_push_window();
         tick_background_fetcher();
-        output_bg_pixel();
 
+        if (!m_sprite_fifo.sprite_found) {
+            check_for_sprite_fetch();
+        }
 
-        if (m_background_fifo.on_screen_x == SCREEN_WIDTH) {
+        if (m_sprite_fifo.sprite_found) {
+            tick_sprite_fetcher();
+        }
+
+        mix_pixels();
+
+        if (m_background_fifo.on_screen_x >= SCREEN_WIDTH) {
             change_mode(ppu_HBLANK);
-			//printf("hblank tick at: %d\n", m_internal_ticks - 80);
         }
         break;
 
     case ppu_HBLANK:
-		//printf("ticks since hblank: %d\n", m_ticks_since_hblank);
         if (m_internal_ticks >= 456) {
             end_of_scanline();
         }
@@ -200,9 +205,9 @@ byte PPU::read_ppu_memory(const ushort& address) {
         return m_ppu_memory.vram[(ushort)(address - 0x8000)];
     }
     else if (address >= 0xfe00 && address < 0xfea0) {
-        if (m_dma.dma_active) {
-            return 0xff;
-        }
+        //if (m_dma.dma_active) {
+            //return 0xff;
+        //}
 
         return m_ppu_memory.oam[(ushort)(address - 0xfe00)];
     }
@@ -270,9 +275,6 @@ std::array<uint32_t, 64> PPU::get_next_tile(const int& index) {
 
 //PRIVATES
 //general helper methods for ppu function
-
-//todo move vram to ppu class, and make mmu/cpu redirect reads to ppu
-//same for oam memory
 void PPU::trigger_interrupt(const bool& is_vblank) {
     if (is_vblank) {
 		emulator->trigger_interrupt(int_VBLANK);
@@ -308,6 +310,8 @@ void PPU::change_mode(ppu_modes new_mode) {
 
     switch (new_mode) {
     case ppu_OAM_SEARCH:
+        reset_sprite_search();
+
         m_oam_blocked = true;
         if (m_ppu_io.stat & 0x20) {
             trigger_interrupt(false);
@@ -361,6 +365,9 @@ void PPU::end_of_scanline() {
         m_background_fifo.current_window_y++;
     }
     m_background_fifo.window_tile = false;
+
+    clear_fifo(m_bg_fifo_queue);
+    clear_fifo(m_sprite_fifo_queue);
 }
 
 void PPU::vblank_next_line() {
@@ -393,6 +400,10 @@ void PPU::update_lyc() {
 //fifo function methods
 
 void PPU::tick_background_fetcher() {
+    if (m_background_fifo.paused) {
+        return;
+    }
+
     m_background_fifo.fifo_ticks++;
 
     if (m_background_fifo.fifo_ticks != 2) {
@@ -512,15 +523,190 @@ void PPU::fetcher_push_row() {
             fifo_pixel new_pixel = {
                 .colour = colour,
                 .pallete = m_ppu_io.bgp,
-                .priority = 0x00,
-                .sprite = 0x00,
-                .sprite_pallete = 0x00
+                .sprite = false,
+                .background_priority = 0x00
             };
 
             push_pixel(m_bg_fifo_queue, new_pixel);
         }
         m_background_fifo.current_x++;
     }
+}
+
+void PPU::sprite_dma_search_tick() {
+    m_sprite_search.ticks++;
+
+    if (m_sprite_search.ticks >= 2) {
+        m_sprite_search.ticks = 0;
+
+        if (m_sprite_search.index >= 40) {
+            return; // scanned all OAM
+        }
+
+        if (m_sprite_buffer.size() >= SPRITE_BUFFER_SIZE) {
+            return; // buffer full (should be 10 max on real HW)
+        }
+
+        fifo_sprite next_sprite;
+        int address = m_sprite_search.index * 4;
+
+        next_sprite.y_pos = m_ppu_memory.oam[address++];
+        next_sprite.x_pos = m_ppu_memory.oam[address++];
+        next_sprite.tile_index = m_ppu_memory.oam[address++];
+        next_sprite.flags = m_ppu_memory.oam[address];
+
+        m_sprite_search.index++;
+
+        int sprite_height = ((m_ppu_io.lcdc & 0x04) != 0) ? 16 : 8;
+
+        // Correct coordinate translation
+        int sprite_top = next_sprite.y_pos - 16;
+        int sprite_bottom = sprite_top + sprite_height;
+
+        bool in_y_range = (m_ppu_io.ly >= sprite_top && m_ppu_io.ly < sprite_bottom);
+        bool visible_x = (next_sprite.x_pos > 0 && next_sprite.x_pos < 168);
+
+        if (in_y_range && visible_x) {
+            m_sprite_buffer.push_back(next_sprite);
+        }
+    }
+}
+
+void PPU::check_for_sprite_fetch() {
+    if (m_sprite_buffer.size() == 0) {
+        return;
+    }
+
+    for (int i = 0; i < m_sprite_buffer.size(); i++) {
+        bool fetch = (m_sprite_buffer[i].x_pos == m_background_fifo.on_screen_x + 8);
+        if (fetch) {
+			m_sprite_fifo.current_sprite = m_sprite_buffer[i];
+            m_sprite_fifo.current_state = fifo_FETCH_TILE_LOW;
+            m_sprite_fifo.sprite_found = true;
+
+			m_sprite_buffer.erase(m_sprite_buffer.begin() + i);
+
+            m_background_fifo.paused = true;
+            m_background_fifo.fifo_ticks = 0;
+            m_background_fifo.current_state = fifo_FETCH_TILE_NUMBER;
+            return;
+        }
+    }
+
+    return;
+}
+
+void PPU::tick_sprite_fetcher() {
+    m_sprite_fifo.ticks++;
+
+    if (m_sprite_fifo.ticks < 2) {
+        return;
+    }
+
+    m_sprite_fifo.ticks = 0;
+
+    switch (m_sprite_fifo.current_state) {
+    case fifo_FETCH_TILE_LOW:
+        sprite_get_tile_low();
+        m_sprite_fifo.current_state = fifo_FETCH_TILE_HIGH;
+        break;
+
+    case fifo_FETCH_TILE_HIGH:
+        sprite_get_tile_high();
+        m_sprite_fifo.current_state = fifo_PUSHING;
+        break;
+
+    case fifo_PUSHING:
+        sprite_push_row();
+        m_sprite_fifo.current_state = fifo_NONE;
+        break;
+
+    case fifo_NONE:
+        return;
+    }
+}
+
+void PPU::sprite_get_tile_low() {
+    //check sprite height and get the row in the sprite we need
+    int sprite_height = ((m_ppu_io.lcdc & 0x04) != 0) ? 16 : 8;
+    int sprite_row = (m_ppu_io.ly + 16) - m_sprite_fifo.current_sprite.y_pos;
+
+    //are we flipped vertically?
+    if (m_sprite_fifo.current_sprite.y_flip()) {
+        sprite_row = (sprite_height - 1) - sprite_row;
+    }
+
+    int tile_index = m_sprite_fifo.current_sprite.tile_index;
+
+    //get the tile index and sprite row for tall sprites
+    if (sprite_height == 16) {
+        tile_index &= 0xfe;  
+        if (sprite_row >= 8) {
+            tile_index += 1;     
+            sprite_row -= 8;    
+        }
+    }
+
+    //read sprite data from vram
+    ushort base_sprite_address = 0x8000 + (tile_index * 16) + (sprite_row * 2);
+    m_sprite_fifo.current_sprite_low = read_ppu_memory(base_sprite_address);
+}
+
+void PPU::sprite_get_tile_high() {
+    //check sprite height and get the row in the sprite we need
+    int sprite_height = ((m_ppu_io.lcdc & 0x04) != 0) ? 16 : 8;
+    int sprite_row = (m_ppu_io.ly + 16) - m_sprite_fifo.current_sprite.y_pos;
+
+    //are we flips vertically?
+    if (m_sprite_fifo.current_sprite.y_flip()) {
+        sprite_row = (sprite_height - 1) - sprite_row;
+    }
+
+    int tile_index = m_sprite_fifo.current_sprite.tile_index;
+
+    //get the tile index and sprite row for tall sprites
+    if (sprite_height == 16) {
+        tile_index &= 0xfe;  
+        if (sprite_row >= 8) {
+            tile_index += 1;     
+            sprite_row -= 8;  
+        }
+    }
+
+    //read sprite data from vram
+    ushort base_sprite_address = 0x8000 + (tile_index * 16) + (sprite_row * 2);
+    m_sprite_fifo.current_sprite_high = read_ppu_memory(base_sprite_address + 1);
+}
+
+void PPU::sprite_push_row() {
+    int sprite_on_x = (int)m_sprite_fifo.current_sprite.x_pos - 8;
+
+    // wait till we reach the sprite on screen
+    if (m_background_fifo.on_screen_x < sprite_on_x) {
+        return; 
+    }
+
+    // push all 8 pixels at once
+    for (int px = 0; px < 8; ++px) {
+        int bit = m_sprite_fifo.current_sprite.x_flip() ? px : (7 - px);
+        byte low_bit = (m_sprite_fifo.current_sprite_low >> bit) & 0x1;
+        byte high_bit = (m_sprite_fifo.current_sprite_high >> bit) & 0x1;
+        byte colour = (high_bit << 1) | low_bit;
+
+        fifo_pixel new_pixel = {
+            .colour = colour,
+            .pallete = m_sprite_fifo.current_sprite.use_pallet_one() ? m_ppu_io.obp1 : m_ppu_io.obp0,
+            .sprite = true,
+            .background_priority = m_sprite_fifo.current_sprite.background_priority(),
+            .screen_x = sprite_on_x + px,
+        };
+
+        push_pixel(m_sprite_fifo_queue, new_pixel);  // Remove the condition here
+    }
+
+    //allow background fifo and mixing to resume
+    m_background_fifo.paused = false;
+    m_sprite_fifo.sprite_found = false;
 }
 
 //fifo helper methods
@@ -562,7 +748,7 @@ ushort PPU::get_tile_address_from_id(const byte& tile_id) {
     return tile_address;
 }
 
-void PPU::reset_fifo_state(fifo_context& fifo, std::queue<fifo_pixel>& fifo_queue) {
+void PPU::reset_bg_fifo(background_fifo_context& fifo, std::queue<fifo_pixel>& fifo_queue) {
     fifo.current_x = 0;
     fifo.current_pixel_id = 0x00;
     fifo.current_pixel_low = 0x00;
@@ -577,34 +763,58 @@ void PPU::reset_fifo_state(fifo_context& fifo, std::queue<fifo_pixel>& fifo_queu
     fifo.scx_discard = false;
 }
 
+void PPU::reset_sprite_search() {
+    m_sprite_search.index = 0;
+    m_sprite_search.ticks = 0;
 
-void PPU::output_bg_pixel() {
-    if (!m_bg_fifo_queue.empty()) {
-        if (!m_background_fifo.scx_discard) {
-            if (m_bg_fifo_queue.size() >= 8) {
-                for (int i = 0; i < (m_ppu_io.scx % 8); i++) {
-                    m_bg_fifo_queue.pop();
-                }
-                m_background_fifo.scx_discard = true;
-                return;
+    m_sprite_buffer.clear();
+    m_sprite_buffer.resize(0);
+}
+
+void PPU::mix_pixels() {
+    if (m_bg_fifo_queue.empty()) return;
+
+    if (m_background_fifo.paused) return;
+
+    // Handle SCX discard (only background, not sprites!)
+    if (!m_background_fifo.scx_discard) {
+        if (m_bg_fifo_queue.size() >= 8) {
+            for (int i = 0; i < (m_ppu_io.scx % 8); i++) {
+                m_bg_fifo_queue.pop();
             }
+            m_background_fifo.scx_discard = true;
         }
+        return;
+    }
 
-        if (m_background_fifo.scx_discard) {
-            fifo_pixel pixel = pop_pixel(m_bg_fifo_queue);
+    // Pop background pixel
+    fifo_pixel bg_pixel = pop_pixel(m_bg_fifo_queue);
+    fifo_pixel final_pixel = bg_pixel; // default to background
 
-            int palette_shift = pixel.colour * 2;
-
-            int palette_colour = (m_ppu_io.bgp >> palette_shift) & 0x03;
-
-            if ((m_ppu_io.lcdc & 0x1) != 0) {
-                m_bg_frame_buffer[m_ppu_io.ly * SCREEN_WIDTH + m_background_fifo.on_screen_x] = m_pallete_colours[palette_colour];
-            }
-            else {
-                m_bg_frame_buffer[m_ppu_io.ly * SCREEN_WIDTH + m_background_fifo.on_screen_x] = 0xffffffff; //all white when bg is off
-            }
-
-            m_background_fifo.on_screen_x++;
+    // Simple sprite check: if sprite pixel exists and isn't transparent, use it
+    if (!m_sprite_fifo_queue.empty()) {
+        fifo_pixel sprite_pixel = pop_pixel(m_sprite_fifo_queue);
+        if (sprite_pixel.colour != 0) { // 0 = transparent
+            final_pixel = sprite_pixel; // sprite always wins if not transparent
         }
     }
+
+    // Simple palette resolve - no priority checks
+    int palette_shift = final_pixel.colour * 2;
+    int palette_colour;
+
+    if (final_pixel.sprite) {
+        // Use sprite palette
+        const byte obp = final_pixel.pallete;
+        palette_colour = (obp >> palette_shift) & 0x03;
+    }
+    else {
+        // Use background palette
+        palette_colour = (m_ppu_io.bgp >> palette_shift) & 0x03;
+    }
+
+    m_bg_frame_buffer[m_ppu_io.ly * SCREEN_WIDTH + m_background_fifo.on_screen_x] =
+        m_pallete_colours[palette_colour];
+
+    m_background_fifo.on_screen_x++;
 }
